@@ -6,6 +6,10 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter('ignore', DeprecationWarning)
 
+# Download libsvm from:
+#             http://www.csie.ntu.edu.tw/~cjlin/cgi-bin/libsvm.cgi?+http://www.csie.ntu.edu.tw/~cjlin/libsvm+tar.gz
+# Change the svm path according to your respective libsvm path location
+# Obs: Remember to compyle the lib first
 sys.path.append('/home/daniel/Documents/DeepLearningOpenCV/libsvm-3.23/python')
 from svmutil import *
 
@@ -19,7 +23,7 @@ def main(args):
         os.system('mkdir -p ' + args.data_save_path)
         np.savez_compressed(os.path.join(args.data_save_path, 'kdd_nsl_processed.npz'), data_train,
                                             labels_train, data_test, labels_test)
-    elif args.mode.find('train') != -1 and not args.gen_dataset:
+    else:
         npzfiles = np.load(os.path.join(args.data_save_path, 'kdd_nsl_processed.npz'), allow_pickle=True)
         data_train = npzfiles['arr_0']; labels_train = npzfiles['arr_1']
         data_test = npzfiles['arr_2']; labels_test = npzfiles['arr_3']
@@ -31,48 +35,58 @@ def main(args):
     if args.norm_type == 'min_max_norm':
         data_train = min_max_norm(data_train)
         data_test = min_max_norm(data_test)
-    # Instantiate svm model and train it using rbf kernel
-    if args.mode == 'train_svm_cross':
-        idx_rand = np.random.permutation(data_train.shape[0])
-        data_train_cross_val = data_train[idx_rand, :]
-        labels_train_cross_val = labels_train[idx_rand]
-        data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//2, :]
-        labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//2]
-        # Use svm cross validation technique to find best Cost and RBF kernel deviation values
-        best_c = -1
-        best_g = -1
-        best_acc = 0
-        for i in range(-5, 15, 1):
-            for j in range(3, -15, -1):
-                new_c = 2**i; new_g = 2**j
-                cv_acc = svm_train(np.squeeze(labels_train_cross_val), data_train_cross_val, '-c {:.5f} -g {:.5f} -v 10 -q'.format(new_c, new_g))
-                if cv_acc > best_acc:
-                    best_acc = cv_acc
-                    best_c = new_c
-                    best_g = new_g
-                    print('\nbest_c[2^{:d}]: {:.5f} best_g[2^{:d}]: {:.5f} best_acc: {:.5f}\n'.format(i, best_c, j, best_g, best_acc))
-    elif args.mode == 'train_svm':
-        idx_rand = np.random.permutation(data_train.shape[0])
+    # Test SVM rbf kernel
+    if args.mode.find('train_svm') != -1:
+        if args.mode == 'train_svm_cross':
+            print('Searching for best c and g values...')
+            idx_rand = np.random.permutation(data_train.shape[0])
+            data_train_cross_val = data_train[idx_rand, :]
+            labels_train_cross_val = labels_train[idx_rand]
+            data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//2, :]
+            labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//2]
+            # Use svm cross validation technique to find best Cost and RBF kernel deviation values
+            best_c = -1
+            best_g = -1
+            best_acc = 0
+            for i in range(-5, 15, 1):
+                for j in range(3, -15, -1):
+                    new_c = 2**i; new_g = 2**j
+                    cv_acc = svm_train(np.squeeze(labels_train_cross_val), data_train_cross_val, '-c {:.5f} -g {:.5f} -v 10 -q'.format(new_c, new_g))
+                    if cv_acc > best_acc:
+                        best_acc = cv_acc
+                        best_c = new_c
+                        best_g = new_g
+                        print('\nbest_c[2^{:d}]: {:.5f} best_g[2^{:d}]: {:.5f} best_acc: {:.5f}\n'.format(i, best_c, j, best_g, best_acc))
+            args.c = best_c
+            args.g = best_g
+        print('Training SVM...')
         svm_model = svm_train(np.squeeze(labels_train), data_train, '-c {:.5f} -g {:.5f} -q'.format(args.c, args.g))
-        # Test prediction
-        prob_test_labels, _, _ = svm_predict(np.squeeze(labels_test), data_test, svm_model, '-q')
-        test_acc, _, _ = evaluations(np.squeeze(labels_test), prob_test_labels)
-        print('Test Acc: {:.2f}'.format(test_acc))
-        #print('best_acc: {:.4f} best_c: {:.4f} best_g: {:.4f}'.format(best_acc, best_c, best_g))
-    # Use the trained RBM model to sample --batch-sz elements from --sample-ites
-    # number of sampling iterations.
-    #elif args.mode == 'test':
-
+        os.system('mkdir -p ' + args.svm_params_path)
+        svm_save_model(os.path.join(args.svm_params_path, 'svm_model.txt'), svm_model)
+    # Test SVM
+    elif args.mode == 'test_svm':
+        os.system('mkdir -p SVMAnalysis')
+        print('Testing SVM...')
+        svm_model = svm_load_model(os.path.join(args.svm_params_path, 'svm_model.txt'))
+        labels_test = np.squeeze(labels_test)
+        pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
+        print('Test Acc: {:.4f}'.format(evals[0]))
+        np.savetxt('SVMAnalysis/acc.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
+        #Plot ROC curve
+        labels = svm_model.get_labels()
+        deci = [labels[0]*val[0] for val in deci]
+        print('Saving ROC under SVMAnalysis folder')
+        generate_roc(deci, labels_test, 'SVMAnalysis')
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_data_file_path', type=str, default='./NSL_KDD_Dataset/KDDTrain+_20Percent.txt',
+    parser.add_argument('--train-data-file-path', type=str, default='./NSL_KDD_Dataset/KDDTrain+_20Percent.txt',
                         help='path to the train data .csv file')
-    parser.add_argument('--test_data_file_path', type=str, default='./NSL_KDD_Dataset/KDDTest+.txt',
+    parser.add_argument('--test-data-file-path', type=str, default='./NSL_KDD_Dataset/KDDTest+.txt',
                         help='path to the test data .csv file')
     parser.add_argument('--metadata-file-path', type=str, default='./NSL_KDD_Dataset/training_attack_types.txt',
                         help='path to the test data .csv file')
-    parser.add_argument('--rbm-params-path', type=str, default='./Params',
+    parser.add_argument('--svm-params-path', type=str, default='./SVMParams',
                         help='path location to save RBM trained weights')
     parser.add_argument('--data-save-path', type=str, default='./TrainData',
                         help='train and test datasets save location')

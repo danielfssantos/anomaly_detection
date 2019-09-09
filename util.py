@@ -1,5 +1,6 @@
 import numpy as np
 import math, os
+from operator import itemgetter
 # https://seaborn.pydata.org/tutorial/distributions.html
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -98,5 +99,48 @@ def load_nsl_kdd_splitted_dataset(data_file_path, attacks_file_path):
             probe_data.append(list(map(float, line)))
     return [np.array(normal_data), np.array(u2r_data), np.array(r2l_data),\
                 np.array(dos_data), np.array(probe_data)]
+
+# Code from https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/#roc_curve_for_binary_svm
+def generate_roc(deci, label, roc_path):
+    #count of postive and negative labels
+    db = []
+    pos, neg = 0, 0
+    for i in range(len(label)):
+        if label[i]>0:
+            pos+=1
+        else:
+            neg+=1
+        db.append([deci[i], label[i]])
+
+    #sorting by decision value
+    db = sorted(db, key=itemgetter(0), reverse=True)
+
+    #calculate ROC
+    xy_arr = []
+    tp, fp = 0., 0.         #assure float division
+    for i in range(len(db)):
+        if db[i][1]>0:      #positive
+            tp+=1
+        else:
+            fp+=1
+        xy_arr.append([fp/neg,tp/pos])
+
+    #area under curve
+    auc = 0.
+    prev_x = 0
+    for x,y in xy_arr:
+        if x != prev_x:
+            auc += (x - prev_x) * y
+            prev_x = x
+
+    #also write to file
+    xy_arr = np.array(xy_arr)
+    plt.plot(xy_arr[:, 0], xy_arr[:, 1], '-r')
+    plt.title('ROC curve of NSL-KDD Test+ AUC: {:.4f}'.format(auc))
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.xlim(left=0, right=1)
+    plt.ylim(bottom=0, top=1)
+    plt.savefig(os.path.join(roc_path, 'roc.png'))
 
 
