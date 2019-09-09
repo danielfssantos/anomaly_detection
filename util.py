@@ -5,12 +5,12 @@ from operator import itemgetter
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def plot_kde_distributions(x, x_sampled, attack_type):
+def plot_kde_distributions(x, x_sampled, attack_type, plot_path):
     sns.kdeplot(np.mean(x_sampled, axis=0),  shade=True, label="BBRBM Sampled Data", color="g");
     ax = sns.kdeplot(np.mean(x, axis=0),  shade=True, label="True Data", color="r");
     ax.set_title('{:s} Distributions'.format(attack_type))
-    plt.savefig(os.path.join('SamplingAnalysis', attack_type + 'Distributions.png'))
-    #plt.show()
+    plt.savefig(os.path.join(plot_path, attack_type + 'Distributions.png'))
+    return
 
 def z_norm(data):
     mean = np.mean(data, axis=0, keepdims=True)
@@ -20,7 +20,6 @@ def z_norm(data):
 def min_max_norm(data):
     return (data - np.amin(data, axis=0, keepdims=True))/ \
             (1e-8 + np.amax(data, axis=0, keepdims=True) - np.amin(data, axis=0, keepdims=True))
-
 
 def matrix_to_batches(input_data, batch_sz=100):
 	numcases = math.ceil(input_data.shape[0]/batch_sz)
@@ -141,6 +140,6 @@ def generate_roc(deci, label, roc_path):
     plt.ylabel('True Positive Rate')
     plt.xlim(left=0, right=1)
     plt.ylim(bottom=0, top=1)
-    plt.savefig(os.path.join(roc_path, 'roc.png'))
+    plt.savefig(roc_path)
 
 

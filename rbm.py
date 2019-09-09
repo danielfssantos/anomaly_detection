@@ -29,9 +29,9 @@ class RBM():
         self.hidbiasinc = np.zeros((1, self.numhid))
         self.visbiasinc = np.zeros((1, self.numdims))
         self.lastposhidprobs = []
-        if params.train_type.find('gbrbm') != -1:
+        if params.rbm_train_type.find('gbrbm') != -1:
             self.visdata_sampler = 'gaussian_distribution'
-        elif params.train_type.find('bbrbm') != -1:
+        elif params.rbm_train_type.find('bbrbm') != -1:
             self.visdata_sampler = 'uniform_distribution'
         self.params = params
 
@@ -67,11 +67,11 @@ class RBM():
 
     def save(self, save_path):
         os.system('mkdir -p ' + save_path)
-        np.savez_compressed(os.path.join(save_path, self.params.train_type + '.npz'), self.vishid, self.visbiases, self.hidbiases)
+        np.savez_compressed(os.path.join(save_path, self.params.rbm_train_type + '.npz'), self.vishid, self.visbiases, self.hidbiases)
         return
 
     def load(self, load_path):
-        npzfiles = np.load(os.path.join(load_path, self.params.train_type + '.npz'))
+        npzfiles = np.load(os.path.join(load_path, self.params.rbm_train_type + '.npz'))
         self.vishid = npzfiles['arr_0']
         self.visbiases = npzfiles['arr_1']
         self.hidbiases = npzfiles['arr_2']
@@ -138,11 +138,11 @@ class RBM():
         # Start persistent markov chains (fantasy particles)
         if self.params.train_type.find('gbrbm') != -1:
             self.fantasy_particles = np.random.randn(self.batch_sz, self.numdims)
-        elif self.params.train_type.find('bbrbm') != -1 and self.params.sample_visdata: 
+        elif self.params.train_type.find('bbrbm') != -1 and self.params.sample_visdata:
             self.fantasy_particles = np.random.randint(low=0, high=2, size=(self.batch_sz, self.numdims))
         elif self.params.train_type.find('bbrbm') != -1 and not self.params.sample_visdata:
             self.fantasy_particles = np.random.rand(self.batch_sz, self.numdims)
-        
+
         # Execute persistent contrastive divergence algorithm
         for epoch in range(self.maxepochs):
             errsum = 0
