@@ -142,4 +142,27 @@ def generate_roc(deci, label, roc_path):
     plt.ylim(bottom=0, top=1)
     plt.savefig(roc_path)
 
+def generate_error_bars(qnt_attacks, labels, pred_labels, bars_path):
+    prev_qnt = 0
+    attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
+    wrong_results = {}
+
+    for i, qnt in enumerate(qnt_attacks):
+        wrong_results[attack_names[i]] = np.sum(labels[prev_qnt : prev_qnt + qnt] != np.array(pred_labels[prev_qnt : prev_qnt + qnt]))
+        wrong_results[attack_names[i]] /= qnt
+        prev_qnt = qnt
+
+    names = list(wrong_results.keys())
+    values = list(wrong_results.values())
+    fig, ax = plt.subplots()
+    plt.bar(range(5), values)
+    plt.xticks(range(5), names)
+    plt.ylabel('Percentage of missclassification')
+    plt.savefig(bars_path)
+
+    #data = {'apples': 10, 'oranges': 15, 'lemons': 5, 'limes': 20}
+    #names = list(data.keys())
+    #values = list(data.values())
+
+
 

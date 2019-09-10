@@ -136,11 +136,11 @@ class RBM():
         using Contrastive Divergence optimization technique
         '''
         # Start persistent markov chains (fantasy particles)
-        if self.params.train_type.find('gbrbm') != -1:
+        if self.params.rbm_train_type.find('gbrbm') != -1:
             self.fantasy_particles = np.random.randn(self.batch_sz, self.numdims)
-        elif self.params.train_type.find('bbrbm') != -1 and self.params.sample_visdata:
+        elif self.params.rbm_train_type.find('bbrbm') != -1 and self.params.sample_visdata:
             self.fantasy_particles = np.random.randint(low=0, high=2, size=(self.batch_sz, self.numdims))
-        elif self.params.train_type.find('bbrbm') != -1 and not self.params.sample_visdata:
+        elif self.params.rbm_train_type.find('bbrbm') != -1 and not self.params.sample_visdata:
             self.fantasy_particles = np.random.rand(self.batch_sz, self.numdims)
 
         # Execute persistent contrastive divergence algorithm
@@ -190,10 +190,10 @@ class RBM():
                 print('epoch {:4d} epsilonw {:e} error {:e}'.format(epoch, self.epsilonw, errsum))
 
     def train(self, batchdata):
-        if self.params.train_type.find('_cd') != -1:
+        if self.params.rbm_train_type.find('_cd') != -1:
             print('Executing Contrastive Divergence Optimization...')
             self.cd_train(batchdata)
-        elif self.params.train_type.find('_pcd') != -1:
+        elif self.params.rbm_train_type.find('_pcd') != -1:
             print('Executing Persistent Contrastive Divergence Optimization...')
             self.pcd_train(batchdata)
 

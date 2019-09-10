@@ -9,6 +9,8 @@ loadmodule u2r
 multihop r2l
 neptune dos
 nmap probe
+saint probe
+mscan probe
 perl u2r
 phf r2l
 pod dos
@@ -18,6 +20,21 @@ satan probe
 smurf dos
 spy r2l
 teardrop dos
+udpstorm dos
 warezclient r2l
 warezmaster r2l
+apache2 dos
+mailbomb dos
+processtable dos
+sendmail r2l
+named r2l
+snmpgetattack r2l
+snmpguess r2l
+xlock r2l
+xsnoop r2l
+worm r2l
+httptunnel u2r
+ps u2r
+sqlattack u2r
+xterm u2r
 

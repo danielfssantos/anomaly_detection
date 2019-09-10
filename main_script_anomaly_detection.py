@@ -30,7 +30,7 @@ def main(args):
             for i in range(len(datum_train)):
                 # Sample biggest_size - len(datum_train[i]) times
                 # for u2r, l2r and probe attacks
-                if i not in [0]:
+                if i not in [0, 1, 4]:
                     args.rbm_train_type = rbm_train_type + '_' + attack_names[i]
                     rbm_model = RBM(args)
                     rbm_model.load(args.rbm_params_path)
@@ -97,7 +97,7 @@ def main(args):
         else:
             svm_model = svm_train(np.squeeze(labels_train), data_train, '-c {:.5f} -g {:.5f} -q'.format(args.c, args.g))
         os.system('mkdir -p ' + args.svm_params_path)
-        if args.mode.find('aug'):
+        if args.mode.find('aug') != -1:
             svm_save_model(os.path.join(args.svm_params_path, 'svm_model_aug.txt'), svm_model)
         else:
             svm_save_model(os.path.join(args.svm_params_path, 'svm_model.txt'), svm_model)
@@ -116,14 +116,21 @@ def main(args):
             np.savetxt('SVMAnalysis/acc_aug.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
         else:
             np.savetxt('SVMAnalysis/acc.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
-        #Plot ROC curve
+        #Plot ROC curve and Misclassification bars graph
         labels = svm_model.get_labels()
         deci = [labels[0]*val[0] for val in deci]
+        # Use datum_test to measure misclassification percentage
+        datum_test = load_nsl_kdd_splitted_dataset(args.test_data_file_path, args.metadata_file_path)
+        qnt_attacks = []
+        for d in datum_test:
+            qnt_attacks.append(len(d))
         print('Saving ROC under SVMAnalysis folder')
         if args.mode.find('aug') != -1:
             generate_roc(deci, labels_test, 'SVMAnalysis/roc_aug.png')
+            generate_error_bars(qnt_attacks, labels_test, pred_labels, 'SVMAnalysis/misclass_aug.png')
         else:
             generate_roc(deci, labels_test, 'SVMAnalysis/roc.png')
+            generate_error_bars(qnt_attacks, labels_test, pred_labels, 'SVMAnalysis/misclass.png')
 
 def parse_args():
     parser = argparse.ArgumentParser()
