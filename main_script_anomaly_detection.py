@@ -1,55 +1,15 @@
-import os, sys
-import numpy as np
 import argparse
 from util import *
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter('ignore', DeprecationWarning)
 
-# Download libsvm from:
-#             http://www.csie.ntu.edu.tw/~cjlin/cgi-bin/libsvm.cgi?+http://www.csie.ntu.edu.tw/~cjlin/libsvm+tar.gz
-# Change the svm path according to your respective libsvm path location
-# Obs: Remember to compyle the lib first
-sys.path.append('/home/daniel/Documents/DeepLearningOpenCV/libsvm-3.23/python')
-from svmutil import *
-from rbm import RBM
-
 def main(args):
     os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
     if args.mode.find('train') != -1 and args.gen_dataset:
-        if args.mode.find('aug') != -1: # Augmenting data
-            datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
-            # Instatiate BBRBM
-            args.num_vis_nodes = datum_train[0].shape[1]
-            attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
-            attacks_biggest_size = len(datum_train[0])
+        if args.mode.find('aug') != -1:
             print('Augmenting NLS-KDD dataset using Normal data size as reference')
-            batch_sz = 100
-            sampled_data_train = []
-            rbm_train_type = args.rbm_train_type
-            for i in range(len(datum_train)):
-                # Sample biggest_size - len(datum_train[i]) times
-                # for u2r, l2r and probe attacks
-                if i not in [0, 1, 4]:
-                    args.rbm_train_type = rbm_train_type + '_' + attack_names[i]
-                    rbm_model = RBM(args)
-                    rbm_model.load(args.rbm_params_path)
-                    print('Sampling data from {:s} BBRBM\n'.format(attack_names[i]))
-                    attack_train_data = np.array(datum_train[i])
-                    qnt_to_sample = attacks_biggest_size - attack_train_data.shape[0]
-                    for j in range(0, qnt_to_sample, batch_sz):
-                        if args.rbm_train_type.find('bbrbm') != -1:
-                            sampled_data = np.random.randint(low=0, high=2, size=(batch_sz, rbm_model.numdims))
-                        elif args.rbm_train_type.find('bbrbm') != -1:
-                            sampled_data = np.random.rand(batch_sz, rbm_model.numdims)
-                        elif args.rbm_train_type.find('gbrbm') != -1:
-                            sampled_data = np.random.randn(batch_sz, rbm_model.numdims)
-                        sampled_data_train.append(rbm_model.sample_data(sampled_data, ites=args.sample_ites))
-            sampled_data_train = np.vstack(sampled_data_train)
-            data_train = np.vstack(datum_train)
-            data_train = np.concatenate((data_train, sampled_data_train), axis=0)
-            labels_train = -1 * np.ones((len(datum_train[0]),))
-            labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
+            data_train, labels_train = augment_dataset(args)
         else:
             data_train, labels_train = load_nsl_kdd_dataset(args.train_data_file_path)
         data_test, labels_test = load_nsl_kdd_dataset(args.test_data_file_path)
@@ -158,6 +118,8 @@ def parse_args():
                         help='train svm but first use cross validation technique to infer the optimum train parameter values')
     parser.add_argument('--sample-data-repetitions', type=int, default=100,
                         help='number of times to execute the sampling process')
+    parser.add_argument('--use-oc-svm', type=int, default=0,
+                        help='use one class svm to improove data augmentation sample quality')
     parser.add_argument('--gen-dataset', type=int, default=1,
                         help='generate or just load (1/0) the train and test NSL-KDD datasets')
     parser.add_argument('--norm-type', type=str, default='min_max_norm',
