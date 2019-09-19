@@ -194,7 +194,6 @@ def augment_dataset(args):
         # Remove from normal class all samples wrong classified by the oc_svm
         #pred_labels, evals, deci  = svm_predict(np.ones((len(datum_train[0]),)), np.vstack(datum_train[0]), oc_svm_model, '-q')
         #datum_train[0] = [datum_train[0][i] for i in range(len(datum_train[0])) if pred_labels[i] == 1]
-
     attacks_biggest_size = len(datum_train[0])
     batch_sz = args.batch_sz
     sampled_datum_train = []
