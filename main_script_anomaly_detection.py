@@ -1,23 +1,39 @@
 import argparse
 from util import *
-import warnings
+import warnings, os
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter('ignore', DeprecationWarning)
+from rbm import RBM
+from gan import GAN
 
 def main(args):
+    os.system('cls' if os.name == 'nt' else 'clear')
     os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
     if args.mode.find('train') != -1 and args.gen_dataset:
         if args.mode.find('aug') != -1:
             print('Augmenting NLS-KDD dataset using Normal data size as reference')
-            data_train, labels_train = augment_dataset(args)
+            if args.mode.find('aug_rbm') != -1:
+                data_sampler_model = RBM(args)
+            elif args.mode.find('aug_gan') != -1:
+                data_sampler_model = GAN(args)
+            else:
+                print('Inform a valid data sampler')
+                exit(0)
+            data_train, labels_train, aug_datum = augment_dataset(args, data_sampler_model)
         else:
             data_train, labels_train = load_nsl_kdd_dataset(args.train_data_file_path)
+            datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
         data_test, labels_test = load_nsl_kdd_dataset(args.test_data_file_path)
         #datum = load_nsl_kdd_dataset(args.train_data_file_path)
         # Save processed data
         os.system('mkdir -p ' + args.data_save_path)
-        np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
-                                         data_train, labels_train, data_test, labels_test)
+        if args.mode.find('aug') != -1:
+            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
+                                              data_train, labels_train, data_test, labels_test, aug_datum)
+        else:
+            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
+                                             data_train, labels_train, data_test, labels_test, datum_train)
+            exit(0)
     else:
         npzfiles = np.load(os.path.join(args.data_save_path, args.train_file_name), allow_pickle=True)
         data_train = npzfiles['arr_0']; labels_train = npzfiles['arr_1']
@@ -32,13 +48,19 @@ def main(args):
         data_test = min_max_norm(data_test)
     # Test SVM rbf kernel
     if args.mode.find('train_svm') != -1:
-        if args.mode == 'train_svm_cross':
+        if args.mode.find('cross') != -1:
             print('Searching for best c and g values...')
             idx_rand = np.random.permutation(data_train.shape[0])
             data_train_cross_val = data_train[idx_rand, :]
             labels_train_cross_val = labels_train[idx_rand]
-            data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//2, :]
-            labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//2]
+            if args.mode.find('aug'):
+                data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//30, :]
+                labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//30]
+                #print(data_train_cross_val.shape)
+                #input()
+            else:
+                data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//2, :]
+                labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//2]
             # Use svm cross validation technique to find best Cost and RBF kernel deviation values
             best_c = -1
             best_g = -1
@@ -54,8 +76,9 @@ def main(args):
                         print('\nbest_c[2^{:d}]: {:.5f} best_g[2^{:d}]: {:.5f} best_acc: {:.5f}\n'.format(i, best_c, j, best_g, best_acc))
             args.c = best_c
             args.g = best_g
-        else:
-            svm_model = svm_train(np.squeeze(labels_train), data_train, '-c {:.5f} -g {:.5f} -q'.format(args.c, args.g))
+        #else:
+        svm_model = svm_train(np.squeeze(labels_train), data_train, '-c {:.5f} -g {:.5f} -q'.format(args.c, args.g))
+        #else:
         os.system('mkdir -p ' + args.svm_params_path)
         if args.mode.find('aug') != -1:
             svm_save_model(os.path.join(args.svm_params_path, 'svm_model_aug.txt'), svm_model)
@@ -63,7 +86,7 @@ def main(args):
             svm_save_model(os.path.join(args.svm_params_path, 'svm_model.txt'), svm_model)
     # Test SVM
     elif args.mode.find('test_svm') != -1:
-        os.system('mkdir -p SVMAnalysis')
+        os.system('mkdir -p ' + args.svm_analysis_path)
         print('Testing SVM...')
         if args.mode.find('aug') != -1:
             svm_model = svm_load_model(os.path.join(args.svm_params_path, 'svm_model_aug.txt'))
@@ -73,9 +96,9 @@ def main(args):
         pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
         print('Test Acc: {:.4f}'.format(evals[0]))
         if args.mode.find('aug') != -1:
-            np.savetxt('SVMAnalysis/acc_aug.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
+            np.savetxt(args.svm_analysis_path+'/acc_aug.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
         else:
-            np.savetxt('SVMAnalysis/acc.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
+            np.savetxt(args.svm_analysis_path+'/acc.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
         #Plot ROC curve and Misclassification bars graph
         labels = svm_model.get_labels()
         deci = [labels[0]*val[0] for val in deci]
@@ -84,16 +107,18 @@ def main(args):
         qnt_attacks = []
         for d in datum_test:
             qnt_attacks.append(len(d))
-        print('Saving ROC under SVMAnalysis folder')
+        print('Saving ROC under {:s} folder'.format(args.svm_analysis_path))
         if args.mode.find('aug') != -1:
-            generate_roc(deci, labels_test, 'SVMAnalysis/roc_aug.png')
-            generate_error_bars(qnt_attacks, labels_test, pred_labels, 'SVMAnalysis/misclass_aug.png')
+            generate_roc(deci, labels_test, args.svm_analysis_path+'/roc_aug.png')
+            generate_error_bars(qnt_attacks, labels_test, pred_labels, args.svm_analysis_path+'/misclass_aug.png')
         else:
-            generate_roc(deci, labels_test, 'SVMAnalysis/roc.png')
-            generate_error_bars(qnt_attacks, labels_test, pred_labels, 'SVMAnalysis/misclass.png')
+            generate_roc(deci, labels_test, args.svm_analysis_path+'/roc.png')
+            generate_error_bars(qnt_attacks, labels_test, pred_labels, args.svm_analysis_path+'/misclass.png')
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    #parser.add_argument('--train-data-file-path', type=str, default='./NSL_KDD_Dataset/KDDTrain+_20Percent.txt',
+      #                  help='path to the train data .csv file')
     parser.add_argument('--train-data-file-path', type=str, default='./NSL_KDD_Dataset/KDDTrain+_20Percent.txt',
                         help='path to the train data .csv file')
     parser.add_argument('--test-data-file-path', type=str, default='./NSL_KDD_Dataset/KDDTest+.txt',
@@ -104,9 +129,11 @@ def parse_args():
                         help='path to the train data .csv file')
     parser.add_argument('--svm-params-path', type=str, default='./SVMParams',
                         help='path location to save RBM trained weights')
-    parser.add_argument('--rbm-params-path', type=str, default='./RBMParams/KDDTrain+_20Percent',
+    parser.add_argument('--svm-analysis-path', type=str, default='./SVMAnalysis',
                         help='path location to save RBM trained weights')
-    parser.add_argument('--rbm-train-type', type=str, default='bbrbm_pcd',
+    parser.add_argument('--data-sampler-params-path', type=str, default='./RBMParams/KDDTrain+_20Percent',
+                        help='path location to save RBM trained weights')
+    parser.add_argument('--data-sampler-train-type', type=str, default='bbrbm_pcd',
                         help='[ bbrbm_cd_attack_type, bbrbm_pcd_attack_type,\
                                     gbrbm_cd_attack_type, gbrbm_pcd_attack_type ] train types\
                                     where attack_type in [ normal, dos, u2r, l2r, probe ]')
@@ -131,6 +158,8 @@ def parse_args():
     parser.add_argument('--sample-visdata', type=int, default=0,
                         help='sample or not (1/0) visible data during gibbs sampling')
     parser.add_argument('--num-hid-nodes', type=int, default=1000,
+                        help='maximum quantity of hidden layer nodes')
+    parser.add_argument('--num-vis-nodes', type=int, default=38,
                         help='maximum quantity of hidden layer nodes')
     parser.add_argument('--cd-steps', type=int, default=1,
                         help='number of CD iteartions')

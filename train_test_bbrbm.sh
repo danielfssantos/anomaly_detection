@@ -1,16 +1,18 @@
 #!/bin/bash
 #!/usr/bin/env python
 
+:<<END
 ################################### NOT ATTACK ###############################################
 ################################### TRAIN BBRBM ##############################################
 python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_normal' --num-epochs=300 --cd-steps=1 --num-hid-nodes=500\
-                                       --gen-dataset=1 --sample-visdata=0 --epsilonw=0.01 --epsilonhb=0.01 --epsilonvb=0.01\
+                                       --gen-dataset=0 --sample-visdata=0 --epsilonw=0.01 --epsilonhb=0.01 --epsilonvb=0.01\
                                        --batch-sz=100 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
 
 
 ################################### TEST BBRBM ###############################################
 python3 main_script_generative_rbm.py  --mode='test' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_normal'\
                                        --batch-sz=100 --sample-visdata=0 --sample-ites=500 --sample-data-repetitions=10
+
 
 ################################### DOS ATTACK ###############################################
 ################################### TRAIN BBRBM ##############################################
@@ -40,9 +42,11 @@ python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pc
                                        --gen-dataset=0 --sample-visdata=0 --epsilonw=0.005 --epsilonhb=0.005 --epsilonvb=0.005\
                                        --batch-sz=100 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
 
+
 ################################### TEST BBRBM ################################################
 python3 main_script_generative_rbm.py  --mode='test' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_r2l'\
                                        --batch-sz=100 --sample-visdata=0 --sample-ites=500 --sample-data-repetitions=10
+
 
 
 #################################### PROBE ATTACK #############################################
@@ -55,3 +59,4 @@ python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pc
 #################################### TEST BBRBM ################################################
 python3 main_script_generative_rbm.py  --mode='test' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_probe'\
                                        --batch-sz=100 --sample-visdata=0 --sample-ites=100 --sample-data-repetitions=10
+END

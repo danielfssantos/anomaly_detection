@@ -11,14 +11,18 @@ import os, sys, operator
 # Obs: Remember to compyle the lib first
 sys.path.append('/home/daniel/Documents/DeepLearningOpenCV/libsvm-3.23/python')
 from svmutil import *
-from rbm import RBM
 from sklearn.metrics.pairwise import euclidean_distances
 
-def plot_kde_distributions(x, x_sampled, attack_type, plot_path):
-    sns.kdeplot(np.mean(x_sampled, axis=0),  shade=True, label="BBRBM Sampled Data", color="g");
-    ax = sns.kdeplot(np.mean(x, axis=0),  shade=True, label="True Data", color="r");
+def plot_kde_distributions(x, x_sampled, attack_type, sampler, plot_path=''):
+    plt.clf()
+    sns.kdeplot(np.mean(x_sampled, axis=0),  shade=True, label=sampler + " Sampled Data", color="g");
+    ax = sns.kdeplot(np.mean(x, axis=0),  shade=True, label="Real Data", color="r");
     ax.set_title('{:s} Distributions'.format(attack_type))
-    plt.savefig(os.path.join(plot_path, attack_type + 'Distributions.png'))
+    if plot_path != '':
+        plt.savefig(os.path.join(plot_path, attack_type + 'Distributions.png'))
+    else:
+        plt.pause(0.0001)
+        plt.show(block=False)
     return
 
 def z_norm(data):
@@ -26,9 +30,16 @@ def z_norm(data):
     std = (np.std(data, axis=0, keepdims=True) + 1e-8)
     return ((data - mean)/std, mean, std)
 
+'''
+def min_max_norm(data):
+    return (data - np.amin(data, axis=1, keepdims=True))/ \
+            (1e-8 + np.amax(data, axis=1, keepdims=True) - np.amin(data, axis=0, keepdims=True))
+'''
+
 def min_max_norm(data):
     return (data - np.amin(data, axis=0, keepdims=True))/ \
             (1e-8 + np.amax(data, axis=0, keepdims=True) - np.amin(data, axis=0, keepdims=True))
+
 
 def matrix_to_batches(input_data, batch_sz=100):
 	numcases = math.ceil(input_data.shape[0]/batch_sz)
@@ -177,14 +188,34 @@ def train_load_oc_svm(datum_train, attack_names, svm_model_path):
     if svm_model is None:
         print('Training OC-SVM for class {:s}'.format(attack_names[0]))
         label = np.ones((len(datum_train[0]),))
-        svm_model = svm_train(label, np.vstack(datum_train[0]), '-s 2 -t 2  -n 0.5' )
+        svm_model = svm_train(label, np.vstack(datum_train[0]), '-s 2 -t 2  -n 0.5 -v 10 -q' )
         svm_save_model(os.path.join(svm_model_path, 'oc_svm_model_aug.txt'), svm_model)
     #pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
     #print('Test Acc: {:.4f}'.format(evals[0]))
     return svm_model
 
+def select_valid_samples(datum):
+    normal_data = datum[0]
+    attack_dict = {0:'normal', 1:'u2r', 2:'r2l', 3:'dos', 4:'probe'}
+    new_datum = [datum[0]]
+    for i in range(1, len(datum)):
+        attack_data = datum[i]
+        normal_attack_mean_dists = np.mean(euclidean_distances(normal_data, attack_data), axis=0)
+        selected_idxs = np.where(normal_attack_mean_dists > 16000)[0]
+        print('Attack {:s} Selected {:d} from {:d} samples'.format(attack_dict[i],
+                                                                                                attack_data[selected_idxs, :].shape[0],
+                                                                                                attack_data.shape[0]))
+        new_datum.append(attack_data[selected_idxs, :])
+        #print([attack_data[selected_idxs, :].shape[0], attack_data.shape[0]])
+        '''
+        # Sort distances in descending order
+        normal_attack_mean_dists_tmp = np.amax(normal_attack_mean_dists) - normal_attack_mean_dists
+        sorted_idxs = normal_attack_mean_dists_tmp.argsort()
+        print(normal_attack_mean_dists[sorted_idxs])
+        '''
+    return new_datum
 
-def augment_dataset(args):
+def augment_dataset(args, data_sampler_model):
     datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
     args.num_vis_nodes = datum_train[0].shape[1]
     attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
@@ -194,29 +225,34 @@ def augment_dataset(args):
         # Remove from normal class all samples wrong classified by the oc_svm
         #pred_labels, evals, deci  = svm_predict(np.ones((len(datum_train[0]),)), np.vstack(datum_train[0]), oc_svm_model, '-q')
         #datum_train[0] = [datum_train[0][i] for i in range(len(datum_train[0])) if pred_labels[i] == 1]
-    attacks_biggest_size = len(datum_train[0])
+    attacks_biggest_size =  len(datum_train[0])
     batch_sz = args.batch_sz
     sampled_datum_train = []
-    rbm_train_type = args.rbm_train_type
+    data_sampler_train_type = args.data_sampler_train_type
     for i in range(len(datum_train)):
-        if i > 0:
-            args.rbm_train_type = rbm_train_type + '_' + attack_names[i]
-            # Instatiate BBRBM
-            rbm_model = RBM(args)
-            rbm_model.load(args.rbm_params_path)
-            print('Sampling data from {:s} BBRBM\n'.format(attack_names[i]))
+        if i not in [0]:
+            if args.mode.find('rbm') != -1:
+                args.data_sampler_train_type = data_sampler_train_type + '_' + attack_names[i]
+                data_sampler_model.load(args.data_sampler_params_path)
+                print('Sampling data from {:s} BBRBM\n'.format(attack_names[i]))
+            else:
+                data_sampler_model.load(args.data_sampler_params_path + '/' + attack_names[i])
+                print('Sampling data from {:s} GAN\n'.format(attack_names[i]))
             attack_train_data = np.array(datum_train[i])
             qnt_to_sample = attacks_biggest_size - attack_train_data.shape[0]
             qnt_valid_samples = 0
             sampled_data_train = np.array([])
             while(qnt_valid_samples < qnt_to_sample):
-                if args.rbm_train_type.find('bbrbm') != -1:
-                    sampled_data = np.random.randint(low=0, high=2, size=(batch_sz, rbm_model.numdims))
-                elif args.rbm_train_type.find('bbrbm') != -1:
-                    sampled_data = np.random.rand(batch_sz, rbm_model.numdims)
-                elif args.rbm_train_type.find('gbrbm') != -1:
-                    sampled_data = np.random.randn(batch_sz, rbm_model.numdims)
-                sampled_data = rbm_model.sample_data(sampled_data, ites=args.sample_ites)
+                if args.data_sampler_train_type.find('bbrbm') != -1:
+                    sampled_data = np.random.randint(low=0, high=2, size=(batch_sz, data_sampler_model.numdims))
+                elif args.data_sampler_train_type.find('bbrbm') != -1:
+                    sampled_data = np.random.rand(batch_sz, data_sampler_model.numdims)
+                elif args.data_sampler_train_type.find('gbrbm') != -1 or args.data_sampler_train_type.find('gan') != - 1:
+                    sampled_data = np.random.randn(batch_sz, args.num_vis_nodes)
+                    if args.data_sampler_train_type.find('rbm') != -1:
+                        sampled_data = data_sampler_model.sample_data(sampled_data, ites=args.sample_ites)
+                    else:
+                        sampled_data = data_sampler_model.sample_data(sampled_data)
                 if args.use_oc_svm:
                     if i == 0:
                         pred_labels, evals, deci  = svm_predict(np.ones((batch_sz,)), sampled_data, oc_svm_model, '-q')
@@ -231,10 +267,12 @@ def augment_dataset(args):
                         sampled_data_train = sampled_data
                     else:
                         sampled_data_train = np.concatenate((sampled_data_train, sampled_data), axis=0)
+                    '''
                     if sampled_data_train.size > 1:
                         # Use pairwise euclidian distance to avoid redundancies in sampled data
                         samples_distances = np.mean(euclidean_distances(sampled_data_train), axis=0)
                         sampled_data_train = sampled_data_train[np.where(samples_distances >= 0.8)[0], :]
+                    '''
                     qnt_valid_samples = sampled_data_train.shape[0]
                     print('{:d} collected samples from {:d}'.format(qnt_valid_samples, qnt_to_sample))
             if sampled_data_train.size:
@@ -246,7 +284,16 @@ def augment_dataset(args):
     data_train = np.concatenate((data_train, sampled_data_train), axis=0)
     labels_train = -1 * np.ones((len(datum_train[0]),))
     labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
-    return data_train, labels_train
+    # Use sampled data to generate augmented datum
+    aug_datum = []
+    j = 0
+    for i in range(len(datum_train)):
+        if i in [0]:
+            aug_datum.append(datum_train[i])
+        else:
+            aug_datum.append(np.vstack([datum_train[i], sampled_datum_train[j]]))
+            j += 1
+    return data_train, labels_train, aug_datum
 
 
 

@@ -14,6 +14,8 @@ def main(args):
     elif args.mode in ['train', 'test']:
         npzfiles = np.load(os.path.join(args.train_data_save_path, 'generative_kdd_nsl_processed.npz'), allow_pickle=True)
         datum_train = npzfiles['arr_0']
+    print('Selecting train valid samples')
+    datum_train = select_valid_samples(datum_train)
     # Chose the specific kind of data to train the RBM
     attack_type = args.rbm_train_type.split('_')[-1]
     if attack_type == 'normal':
@@ -27,6 +29,8 @@ def main(args):
     elif attack_type == 'probe':
         data_train = datum_train[4]
     # Adjust dataset size to fit into batch_sz
+    if data_train.shape[0] < args.batch_sz:
+        args.batch_sz = data_train.shape[0]//5
     max_train_data = data_train.shape[0] - (data_train.shape[0] % args.batch_sz)
     data_train = data_train[0 : max_train_data, :]
     # Normalize data according to train_type
