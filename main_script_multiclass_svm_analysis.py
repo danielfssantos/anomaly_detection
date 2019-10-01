@@ -106,7 +106,7 @@ def main(args):
             print('Train done...')
     # Test SVM
     elif args.mode.find('test_svm') != -1:
-        os.system('mkdir -p MultiSVMAnalysis')
+        os.system('mkdir -p ' + args.svm_analysis_path)
         print('Testing SVM...')
         if args.mode.find('aug') != -1:
             svm_model = svm_load_model(os.path.join(args.svm_params_path, 'svm_model_aug.txt'))
@@ -116,9 +116,9 @@ def main(args):
         pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
         print('Test Acc: {:.4f}'.format(evals[0]))
         if args.mode.find('aug') != -1:
-            np.savetxt('MultiSVMAnalysis/acc_aug.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
+            np.savetxt(args.svm_analysis_path + '/acc_aug.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
         else:
-            np.savetxt('MultiSVMAnalysis/acc.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
+            np.savetxt(args.svm_analysis_path + '/acc.txt', np.array(evals[0]).reshape(1,), fmt='%.4f')
         #Generate confusion matrix
         attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
         #attack_names = {0 : 'u2r', 1 : 'r2l', 2 : 'dos', 3 : 'probe'}
@@ -151,9 +151,9 @@ def main(args):
                 conf_matrix[i, j] = pred_labels_current_class[np.where(pred_labels_current_class == j)].size/pred_labels_current_class.size
                 sheet1.write(i + 1, j + 1, '{:.2f}'.format(conf_matrix[i, j]), style_float_num)
         if args.mode.find('aug') != -1:
-            wb.save(os.path.join('MultiSVMAnalysis', 'confusion_matrix_aug.xls'))
+            wb.save(os.path.join(args.svm_analysis_path, 'confusion_matrix_aug.xls'))
         else:
-            wb.save(os.path.join('MultiSVMAnalysis', 'confusion_matrix.xls'))
+            wb.save(os.path.join(args.svm_analysis_path, 'confusion_matrix.xls'))
 
 
 def parse_args():
@@ -167,6 +167,8 @@ def parse_args():
     parser.add_argument('--train-file-name', type=str, default='discriminative_kdd_nsl_processed_aug.npz',
                         help='path to the train data .csv file')
     parser.add_argument('--svm-params-path', type=str, default='./SVMParams',
+                        help='path location to save RBM trained weights')
+    parser.add_argument('--svm-analysis-path', type=str, default='./MultiSVMAnalysis',
                         help='path location to save RBM trained weights')
     parser.add_argument('--rbm-params-path', type=str, default='./RBMParams/KDDTrain+_20Percent',
                         help='path location to save RBM trained weights')
