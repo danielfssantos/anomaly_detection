@@ -6,12 +6,12 @@ from util import *
 
 def main(args):
     #os.system('reset')
-    if args.mode == 'train' and args.gen_dataset:
+    if (args.mode == 'train' or args.mode == 'gen_features') and args.gen_dataset:
         datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
         # Save processed data
         os.system('mkdir -p ' + args.train_data_save_path)
         np.savez_compressed(os.path.join(args.train_data_save_path, 'generative_kdd_nsl_processed.npz'), datum_train)
-    elif args.mode in ['train', 'test']:
+    elif args.mode in ['train', 'test', 'gen_features']:
         npzfiles = np.load(os.path.join(args.train_data_save_path, 'generative_kdd_nsl_processed.npz'), allow_pickle=True)
         datum_train = npzfiles['arr_0']
     print('Selecting train valid samples')
@@ -49,8 +49,8 @@ def main(args):
     # Use the trained RBM model to sample --batch-sz elements from --sample-ites
     # number of sampling iterations.
     elif args.mode == 'test':
-        os.system('mkdir -p ' + args.results_path)
-        np.savetxt(os.path.join(args.results_path, 'original_'+attack_type+'_data.txt'), data_train, fmt='%.4f')
+        os.system('mkdir -p ' + args.results_samples_path)
+        np.savetxt(os.path.join(args.results_samples_path, 'original_'+attack_type+'_data.txt'), data_train, fmt='%.4f')
         args.num_vis_nodes = data_train.shape[1]
         rbm_model = RBM(args)
         rbm_model.load(args.rbm_params_path)
@@ -66,8 +66,18 @@ def main(args):
                 sampled_data = np.random.randn(args.batch_sz, rbm_model.numdims)
             final_sampled_data += rbm_model.sample_data(sampled_data, ites=args.sample_ites)
         sampled_data = final_sampled_data/args.sample_data_repetitions
-        np.savetxt(os.path.join(args.results_path, 'sampled_'+attack_type+'_data.txt'), sampled_data, fmt='%.4f')
-        plot_kde_distributions(data_train, sampled_data, attack_type, args.results_path)
+        np.savetxt(os.path.join(args.results_samples_path, 'sampled_'+attack_type+'_data.txt'), sampled_data, fmt='%.4f')
+        plot_kde_distributions(data_train, sampled_data, attack_type, args.results_samples_path)
+    elif args.mode == 'gen_features':
+        os.system('mkdir -p ' + args.results_features_path)
+        np.savetxt(os.path.join(args.results_features_path, 'original_'+attack_type+'_data.txt'), data_train, fmt='%.4f')
+        args.num_vis_nodes = data_train.shape[1]
+        rbm_model = RBM(args)
+        rbm_model.load(args.rbm_params_path)
+        data_features = rbm_model.sample_data(data_train, ites=args.sample_ites, return_type='features')
+        np.savetxt(os.path.join(args.results_features_path, 'features_'+attack_type+'_data.txt'), data_features, fmt='%.4f')
+        #data_train = rbm_model.sample_data(data_train, return_type='features')
+        #plot_kde_distributions(data_train, sampled_features, attack_type, args.results_features_path)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -81,7 +91,9 @@ def parse_args():
                         help='path location to save RBM trained weights')
     parser.add_argument('--train-data-save-path', type=str, default='./TrainData/KDDTrain+_20Percent',
                         help='train and test datasets save location')
-    parser.add_argument('--results-path', type=str, default='./SamplingAnalysis/KDDTrain+_20Percent',
+    parser.add_argument('--results-samples-path', type=str, default='./SamplingAnalysis/KDDTrain+_20Percent',
+                        help='path location to save RBM trained weights')
+    parser.add_argument('--results-features-path', type=str, default='./SamplingAnalysis/KDDTrain+_20Percent',
                         help='path location to save RBM trained weights')
     parser.add_argument('--mode', type=str, default='train',
                         help='train/test rbm')
@@ -95,7 +107,7 @@ def parse_args():
                                     where attack_type in [ normal, dos, u2r, l2r, probe ]')
     parser.add_argument('--sample-visdata', type=int, default=0,
                         help='sample or not (1/0) visible data during gibbs sampling')
-    parser.add_argument('--num-hid-nodes', type=int, default=1000,
+    parser.add_argument('--num-hid-nodes', type=int, default=100,
                         help='maximum quantity of hidden layer nodes')
     parser.add_argument('--cd-steps', type=int, default=1,
                         help='number of CD iteartions')

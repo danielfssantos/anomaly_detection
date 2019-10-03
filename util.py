@@ -225,14 +225,17 @@ def augment_dataset(args, data_sampler_model):
         # Remove from normal class all samples wrong classified by the oc_svm
         #pred_labels, evals, deci  = svm_predict(np.ones((len(datum_train[0]),)), np.vstack(datum_train[0]), oc_svm_model, '-q')
         #datum_train[0] = [datum_train[0][i] for i in range(len(datum_train[0])) if pred_labels[i] == 1]
-    attacks_biggest_size =  len(datum_train[0])
+    attacks_biggest_size =  2 * len(datum_train[0])
     batch_sz = args.batch_sz
     sampled_datum_train = []
-    data_sampler_train_type = args.data_sampler_train_type
+    if args.mode.find('rbm'):
+        data_sampler_train_type = args.rbm_train_type
+    rbm_train_type_aux = args.rbm_train_type
     for i in range(len(datum_train)):
+        args.rbm_train_type = rbm_train_type_aux
         if i not in [0]:
             if args.mode.find('rbm') != -1:
-                args.data_sampler_train_type = data_sampler_train_type + '_' + attack_names[i]
+                args.rbm_train_type = args.rbm_train_type + '_' + attack_names[i]
                 data_sampler_model.load(args.data_sampler_params_path)
                 print('Sampling data from {:s} BBRBM\n'.format(attack_names[i]))
             else:
@@ -281,6 +284,67 @@ def augment_dataset(args, data_sampler_model):
     sampled_data_train = np.vstack(sampled_datum_train).reshape(-1, args.num_vis_nodes)
 
     data_train = np.vstack(datum_train)
+    data_train = min_max_norm(data_train)
+    data_train = np.concatenate((data_train, sampled_data_train), axis=0)
+    labels_train = -1 * np.ones((len(datum_train[0]),))
+    labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
+    # Use sampled data to generate augmented datum
+    aug_datum = []
+    j = 0
+    for i in range(len(datum_train)):
+        if i in [0]:
+            aug_datum.append(min_max_norm(datum_train[i]))
+        else:
+            aug_datum.append(np.vstack([min_max_norm(datum_train[i]), sampled_datum_train[j]]))
+            j += 1
+    return data_train, labels_train, aug_datum
+
+
+def gen_features_dataset(args, data_sampler_model):
+
+    if args.mode.find('train') != -1:
+        datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
+    else:
+        datum_train = load_nsl_kdd_splitted_dataset(args.test_data_file_path, args.metadata_file_path)
+    args.num_vis_nodes = datum_train[0].shape[1]
+    attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
+    attacks_biggest_size =  len(datum_train[0])
+    batch_sz = args.batch_sz
+    data_train = []
+    datum_features = []
+
+    for i in range(len(datum_train)):
+        rbm_train_type_aux = args.rbm_train_type
+        if args.mode.find('rbm') != -1:
+            args.rbm_train_type = args.rbm_train_type + '_' + attack_names[i]
+            data_sampler_model.load(args.data_sampler_params_path)
+            print('Sampling data from {:s} BBRBM\n'.format(attack_names[i]))
+            args.rbm_train_type = rbm_train_type_aux
+        else:
+            data_sampler_model.load(args.data_sampler_params_path + '/' + attack_names[i])
+            print('Sampling data from {:s} GAN\n'.format(attack_names[i]))
+        current_class_features = []
+        for j in range(math.ceil(len(datum_train[i])/args.batch_sz)):
+            if j != math.ceil(len(datum_train[i])/args.batch_sz) - 1:
+                batchdata = datum_train[i][j * args.batch_sz : (j + 1) * args.batch_sz, :]
+            else:
+                batchdata = datum_train[i][j * args.batch_sz :, :]
+            batchdata = min_max_norm(batchdata)
+            features = data_sampler_model.sample_data(batchdata,
+                                                                                ites=args.sample_ites,
+                                                                                return_type='features')
+            data_train.append(features)
+            current_class_features.append(features)
+        datum_features.append(np.vstack(current_class_features))
+
+    data_train = np.vstack(data_train)
+    labels_train = -1 * np.ones((len(datum_train[0]),))
+    labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
+    return (data_train, labels_train, datum_features)
+    '''
+    sampled_data_train = np.vstack(sampled_datum_train).reshape(-1, args.num_vis_nodes)
+
+    data_train = np.vstack(datum_train)
     data_train = np.concatenate((data_train, sampled_data_train), axis=0)
     labels_train = -1 * np.ones((len(datum_train[0]),))
     labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
@@ -294,6 +358,5 @@ def augment_dataset(args, data_sampler_model):
             aug_datum.append(np.vstack([datum_train[i], sampled_datum_train[j]]))
             j += 1
     return data_train, labels_train, aug_datum
-
-
+   '''
 

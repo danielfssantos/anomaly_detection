@@ -38,11 +38,11 @@ class RBM():
     def sigmoid(self, x):
         return 1./(1 + np.exp(-x))
 
-    def gibbs_step(self, visdata):
+    def gibbs_step(self, visdata, return_features=False):
         numcases = visdata.shape[0]
         # Sample hidden units from visible units using Bernoulli method
-        hidprobs = self.sigmoid(np.dot(visdata, self.vishid) + self.hidbiases)
-        poshidstates = hidprobs > np.random.rand(numcases, self.numhid)
+        poshidprobs = self.sigmoid(np.dot(visdata, self.vishid) + self.hidbiases)
+        poshidstates = poshidprobs > np.random.rand(numcases, self.numhid)
         negdataprob = np.dot(poshidstates, self.vishid.T) + self.visbiases
         # Sample visible units from hidden units using Gaussian method
         if self.visdata_sampler == 'gaussian_distribution':
@@ -58,12 +58,22 @@ class RBM():
             else:
                 negdata = negdataprob
         neghidprobs = self.sigmoid(np.dot(negdata, self.vishid) + self.hidbiases)
-        return negdata, neghidprobs
+        if return_features:
+            return negdata, poshidprobs
+        else:
+            return negdata, neghidprobs
 
-    def sample_data(self, input_data, ites=200, qnt_particles=100):
+    def sample_data(self, input_data, ites=1, qnt_particles=100, return_type='samples'):
+        if return_type == 'features':
+            return_features = True
+        else:
+            return_features = False
         for i in range(ites):
-            input_data, _ = self.gibbs_step(input_data)
-        return input_data
+            input_data, data_features = self.gibbs_step(input_data, return_features)
+        if return_features:
+            return data_features
+        else:
+            return input_data
 
     def save(self, save_path):
         os.system('mkdir -p ' + save_path)
@@ -154,6 +164,7 @@ class RBM():
                 self.epsilonvb = np.maximum(self.epsilonvb/1.00015, 0.000010)
                 self.epsilonhb = np.maximum(self.epsilonhb/1.00015, 0.000010)
                 ###### START POSITIVE PHASE ######
+
                 poshidprobs = self.sigmoid(np.dot(batchdata, self.vishid) + self.hidbiases)
                 posprods = np.dot(batchdata.T, poshidprobs)
                 poshidact = np.sum(poshidprobs, axis=0)

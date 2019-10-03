@@ -5,6 +5,7 @@ import xlwt
 from xlwt import Workbook
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter('ignore', DeprecationWarning)
+from rbm import RBM
 
 def main(args):
     os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
@@ -45,7 +46,11 @@ def main(args):
                     labels_train_cross_val = np.concatenate((labels_train_cross_val,\
                                                                                    i * np.ones((max_cross_val_samples,))), axis=0)
     # Create test data and labels
-    datum_test = load_nsl_kdd_splitted_dataset(args.test_data_file_path, args.metadata_file_path)
+    if args.mode.find('features') == -1:
+        datum_test = load_nsl_kdd_splitted_dataset(args.test_data_file_path, args.metadata_file_path)
+    else:
+        data_sampler_model = RBM(args)
+        data_test, labels_test, datum_test = gen_features_dataset(args, data_sampler_model)
     data_test = np.array([])
     labels_test = np.array([])
     #del datum_test[0]
@@ -62,8 +67,8 @@ def main(args):
         data_train, mean, std = z_norm(data_train)
         data_test -= mean
         data_test /= std
-    if args.norm_type == 'min_max_norm':
-        data_train = min_max_norm(data_train)
+    if args.norm_type == 'min_max_norm' and args.mode.find('features') == -1:
+        #data_train = min_max_norm(data_train)
         data_test = min_max_norm(data_test)
         if args.mode.find('cross') != -1:
             data_train_cross_val = min_max_norm(data_train_cross_val)
@@ -176,6 +181,10 @@ def parse_args():
                         help='[ bbrbm_cd_attack_type, bbrbm_pcd_attack_type,\
                                     gbrbm_cd_attack_type, gbrbm_pcd_attack_type ] train types\
                                     where attack_type in [ normal, dos, u2r, l2r, probe ]')
+    parser.add_argument('--data-sampler-params-path', type=str, default='./RBMParams/KDDTrain+_20Percent',
+                        help='path location to save RBM trained weights')
+    parser.add_argument('--num-vis-nodes', type=int, default=38,
+                        help='maximum quantity of hidden layer nodes')
     parser.add_argument('--data-save-path', type=str, default='./TrainData/KDDTrain+_20Percent/Augmented',
                         help='train and test datasets save location')
     parser.add_argument('--datum-save-path', type=str, default='./TrainData/KDDTrain+_20Percent',

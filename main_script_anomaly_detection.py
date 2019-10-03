@@ -20,6 +20,9 @@ def main(args):
                 print('Inform a valid data sampler')
                 exit(0)
             data_train, labels_train, aug_datum = augment_dataset(args, data_sampler_model)
+        elif args.mode.find('features') != -1:
+            data_sampler_model = RBM(args)
+            data_train, labels_train, datum_features = gen_features_dataset(args, data_sampler_model)
         else:
             data_train, labels_train = load_nsl_kdd_dataset(args.train_data_file_path)
             datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
@@ -30,11 +33,13 @@ def main(args):
         if args.mode.find('aug') != -1:
             np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
                                               data_train, labels_train, data_test, labels_test, aug_datum)
+        elif args.mode.find('features') != -1:
+            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
+                                             data_train, labels_train, data_test, labels_test, datum_features)
         else:
             np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
                                              data_train, labels_train, data_test, labels_test, datum_train)
-            exit(0)
-    else:
+    elif args.mode.find('features') == -1:
         npzfiles = np.load(os.path.join(args.data_save_path, args.train_file_name), allow_pickle=True)
         data_train = npzfiles['arr_0']; labels_train = npzfiles['arr_1']
         data_test = npzfiles['arr_2']; labels_test = npzfiles['arr_3']
@@ -43,9 +48,10 @@ def main(args):
         data_train, mean, std = z_norm(data_train)
         data_test -= mean
         data_test /= std
-    if args.norm_type == 'min_max_norm':
-        data_train = min_max_norm(data_train)
+    if args.norm_type == 'min_max_norm' and args.mode.find('features') == -1:
+        #data_train = min_max_norm(data_train)
         data_test = min_max_norm(data_test)
+
     # Test SVM rbf kernel
     if args.mode.find('train_svm') != -1:
         if args.mode.find('cross') != -1:
@@ -53,14 +59,14 @@ def main(args):
             idx_rand = np.random.permutation(data_train.shape[0])
             data_train_cross_val = data_train[idx_rand, :]
             labels_train_cross_val = labels_train[idx_rand]
-            if args.mode.find('aug'):
-                data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//30, :]
-                labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//30]
+            #if args.mode.find('aug'):
+            data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//30, :]
+            labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//30]
                 #print(data_train_cross_val.shape)
                 #input()
-            else:
-                data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//2, :]
-                labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//2]
+            #else:
+            #data_train_cross_val = data_train_cross_val[0 : data_train_cross_val.shape[0]//2, :]
+            #labels_train_cross_val = labels_train_cross_val[0 : labels_train_cross_val.shape[0]//2]
             # Use svm cross validation technique to find best Cost and RBF kernel deviation values
             best_c = -1
             best_g = -1
@@ -74,9 +80,11 @@ def main(args):
                         best_c = new_c
                         best_g = new_g
                         print('\nbest_c[2^{:d}]: {:.5f} best_g[2^{:d}]: {:.5f} best_acc: {:.5f}\n'.format(i, best_c, j, best_g, best_acc))
+            print('\nbest_c[: {:.5f} best_g: {:.5f} best_acc: {:.5f}\n'.format(best_c, best_g, best_acc))
             args.c = best_c
             args.g = best_g
         #else:
+        print('Train SVM...')
         svm_model = svm_train(np.squeeze(labels_train), data_train, '-c {:.5f} -g {:.5f} -q'.format(args.c, args.g))
         #else:
         os.system('mkdir -p ' + args.svm_params_path)
@@ -92,6 +100,11 @@ def main(args):
             svm_model = svm_load_model(os.path.join(args.svm_params_path, 'svm_model_aug.txt'))
         else:
             svm_model = svm_load_model(os.path.join(args.svm_params_path, 'svm_model.txt'))
+        if args.mode.find('features') != -1:
+            data_sampler_model = RBM(args)
+            data_test, labels_test, _ = gen_features_dataset(args, data_sampler_model)
+        print(data_test.shape)
+        input()
         labels_test = np.squeeze(labels_test)
         pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
         print('Test Acc: {:.4f}'.format(evals[0]))
@@ -133,6 +146,10 @@ def parse_args():
                         help='path location to save RBM trained weights')
     parser.add_argument('--data-sampler-params-path', type=str, default='./RBMParams/KDDTrain+_20Percent',
                         help='path location to save RBM trained weights')
+    parser.add_argument('--rbm-train-type', type=str, default='bbrbm_pcd',
+                        help='[ bbrbm_cd_attack_type, bbrbm_pcd_attack_type,\
+                                    gbrbm_cd_attack_type, gbrbm_pcd_attack_type ] train types\
+                                    where attack_type in [ normal, dos, u2r, l2r, probe ]')
     parser.add_argument('--data-sampler-train-type', type=str, default='bbrbm_pcd',
                         help='[ bbrbm_cd_attack_type, bbrbm_pcd_attack_type,\
                                     gbrbm_cd_attack_type, gbrbm_pcd_attack_type ] train types\
@@ -143,7 +160,7 @@ def parse_args():
                         help='train and test datasets save location')
     parser.add_argument('--mode', type=str, default='train_svm',
                         help='train svm but first use cross validation technique to infer the optimum train parameter values')
-    parser.add_argument('--sample-data-repetitions', type=int, default=100,
+    parser.add_argument('--sample-data-repetitions', type=int, default=40,
                         help='number of times to execute the sampling process')
     parser.add_argument('--use-oc-svm', type=int, default=0,
                         help='use one class svm to improove data augmentation sample quality')
