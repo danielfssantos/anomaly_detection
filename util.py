@@ -9,56 +9,45 @@ import os, sys, operator
 #             http://www.csie.ntu.edu.tw/~cjlin/cgi-bin/libsvm.cgi?+http://www.csie.ntu.edu.tw/~cjlin/libsvm+tar.gz
 # Change the svm path according to your respective libsvm path location
 # Obs: Remember to compyle the lib first
-sys.path.append('/home/daniel/Documents/DeepLearningOpenCV/libsvm-3.23/python')
-from svmutil import *
 from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.metrics import roc_curve, auc
+from sklearn import preprocessing
+from sklearn.model_selection import RandomizedSearchCV
 
-def plot_kde_distributions(x, x_sampled, attack_type, sampler, plot_path=''):
+def plot_kde_distributions(x, x_sampled, attack_type, plot_path=''):
     plt.clf()
-    sns.kdeplot(np.mean(x_sampled, axis=0),  shade=True, label=sampler + " Sampled Data", color="g");
-    ax = sns.kdeplot(np.mean(x, axis=0),  shade=True, label="Real Data", color="r");
+    #sns.kdeplot(np.mean(x_sampled, axis=0),  shade=True, label=sampler + " Sampled Data", color="g");
+    real_mean = np.mean(x, axis=0)
+    sampled_mean = np.mean(x_sampled, axis=0)
+    sns.kdeplot(sampled_mean,  shade=True, label="Sampled Data", color="g");
+    ax = sns.kdeplot(real_mean,  shade=True, label="Real Data", color="r");
     ax.set_title('{:s} Distributions'.format(attack_type))
     if plot_path != '':
         plt.savefig(os.path.join(plot_path, attack_type + 'Distributions.png'))
     else:
         plt.pause(0.0001)
         plt.show(block=False)
+    np.save(os.path.join(plot_path,'real_' + attack_type + '_data' '.npy'), real_mean)
+    np.save(os.path.join(plot_path,'sampled_' + attack_type + '_data' '.npy'), sampled_mean)
     return
 
-def z_norm(data):
-    mean = np.mean(data, axis=0, keepdims=True)
-    std = (np.std(data, axis=0, keepdims=True) + 1e-8)
-    return ((data - mean)/std, mean, std)
-
-'''
-def min_max_norm(data):
-    return (data - np.amin(data, axis=1, keepdims=True))/ \
-            (1e-8 + np.amax(data, axis=1, keepdims=True) - np.amin(data, axis=0, keepdims=True))
-'''
-
-def min_max_norm(data):
-    return (data - np.amin(data, axis=0, keepdims=True))/ \
-            (1e-8 + np.amax(data, axis=0, keepdims=True) - np.amin(data, axis=0, keepdims=True))
-
-
 def matrix_to_batches(input_data, batch_sz=100):
-	numcases = math.ceil(input_data.shape[0]/batch_sz)
-	if input_data.shape[0] % batch_sz:
-		multiple_div = False
-	else:
-		multiple_div = True
-	batchdata = []
-	for i in range(numcases):
-		if i == numcases - 1 and not multiple_div:
-			batchdata.append(input_data[i * batch_sz :, :])
-		else:
-			batchdata.append(input_data[i * batch_sz : i * batch_sz + batch_sz, :])
-	return batchdata
+    numcases = math.ceil(input_data.shape[0]/batch_sz)
+    if input_data.shape[0] % batch_sz:
+        multiple_div = False
+    else:
+        multiple_div = True
+    batchdata = []
+    for i in range(numcases):
+        if i == numcases - 1 and not multiple_div:
+            batchdata.append(input_data[i * batch_sz :, :])
+        else:
+            batchdata.append(input_data[i * batch_sz : i * batch_sz + batch_sz, :])
+    return batchdata
 
 def load_nsl_kdd_dataset(data_file_path):
     data = []
     labels = []
-
     # Read the dataset.txt file
     with open(data_file_path, 'r') as f:
         train_file_content = f.readlines()
@@ -77,7 +66,7 @@ def load_nsl_kdd_dataset(data_file_path):
         data.append(list(map(float, line)))
     return (np.array(data), np.array(labels))
 
-def load_nsl_kdd_splitted_dataset(data_file_path, attacks_file_path):
+def load_splitted_nsl_kdd_dataset(data_file_path, attacks_file_path):
     # Train data formats
     normal_data = []
     dos_data = []
@@ -154,13 +143,29 @@ def generate_roc(deci, label, roc_path):
 
     #also write to file
     xy_arr = np.array(xy_arr)
+    np.save(os.path.join(roc_path, 'roc.npy'), xy_arr)
     plt.plot(xy_arr[:, 0], xy_arr[:, 1], '-r')
     plt.title('ROC curve of NSL-KDD Test+ AUC: {:.4f}'.format(auc))
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.xlim(left=0, right=1)
     plt.ylim(bottom=0, top=1)
-    plt.savefig(roc_path)
+    plt.savefig(os.path.join(roc_path, 'roc.png'))
+
+def generate_roc2(deci, label, roc_path):
+    fpr, tpr, _ = roc_curve(label, deci)
+    roc_auc = auc(fpr, tpr)
+    #also write to file
+    xy_arr = np.concatenate((fpr[:, np.newaxis], tpr[:, np.newaxis]), axis=1)
+    np.save(os.path.join(roc_path, 'roc.npy'), xy_arr)
+    plt.plot(xy_arr[:, 0], xy_arr[:, 1], '-r')
+    plt.title('ROC curve of NSL-KDD Test+ AUC: {:.4f}'.format(roc_auc))
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.xlim(left=0, right=1)
+    plt.ylim(bottom=0, top=1)
+    plt.savefig(os.path.join(roc_path, 'roc.png'))
+
 
 def generate_error_bars(qnt_attacks, labels, pred_labels, bars_path):
     prev_qnt = 0
@@ -183,25 +188,33 @@ def generate_error_bars(qnt_attacks, labels, pred_labels, bars_path):
     plt.ylabel('Percentage of missclassification')
     plt.savefig(bars_path)
 
-def train_load_oc_svm(datum_train, attack_names, svm_model_path):
-    svm_model = svm_load_model(os.path.join(svm_model_path, 'oc_svm_model_aug.txt'))
-    if svm_model is None:
-        print('Training OC-SVM for class {:s}'.format(attack_names[0]))
-        label = np.ones((len(datum_train[0]),))
-        svm_model = svm_train(label, np.vstack(datum_train[0]), '-s 2 -t 2  -n 0.5 -v 10 -q' )
-        svm_save_model(os.path.join(svm_model_path, 'oc_svm_model_aug.txt'), svm_model)
-    #pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
-    #print('Test Acc: {:.4f}'.format(evals[0]))
-    return svm_model
 
 def select_valid_samples(datum):
     normal_data = datum[0]
     attack_dict = {0:'normal', 1:'u2r', 2:'r2l', 3:'dos', 4:'probe'}
-    new_datum = [datum[0]]
+
+    normal_data_mean_dists_tmp = np.mean(euclidean_distances(normal_data), axis=0)
+    sorted_idxs = normal_data_mean_dists_tmp.argsort()
+    qnt_attack_data = 0
+    for data in datum[1 :]:
+        qnt_attack_data += len(data)
+
+    new_datum = [normal_data[sorted_idxs[0 : qnt_attack_data], :]]
+    print('Attack {:s} Selected {:d} from {:d} samples'.format(attack_dict[0],
+                                                                qnt_attack_data,
+                                                                len(datum[0])))
+    #print(np.mean(euclidean_distances(normal_data), axis=0))
     for i in range(1, len(datum)):
+        if i == 1:
+            new_datum.append(datum[i])
+            continue
         attack_data = datum[i]
         normal_attack_mean_dists = np.mean(euclidean_distances(normal_data, attack_data), axis=0)
-        selected_idxs = np.where(normal_attack_mean_dists > 16000)[0]
+        #print(normal_attack_mean_dists)
+        #input()
+        #continue
+        #selected_idxs = np.where(normal_attack_mean_dists > 16000)[0]
+        selected_idxs = np.where(normal_attack_mean_dists > 0.75)[0]
         print('Attack {:s} Selected {:d} from {:d} samples'.format(attack_dict[i],
                                                                                                 attack_data[selected_idxs, :].shape[0],
                                                                                                 attack_data.shape[0]))
@@ -215,104 +228,19 @@ def select_valid_samples(datum):
         '''
     return new_datum
 
-def augment_dataset(args, data_sampler_model):
-    datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
-    args.num_vis_nodes = datum_train[0].shape[1]
-    attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
-
-    if args.use_oc_svm:
-        oc_svm_model = train_load_oc_svm(datum_train, attack_names, args.svm_params_path)
-        # Remove from normal class all samples wrong classified by the oc_svm
-        #pred_labels, evals, deci  = svm_predict(np.ones((len(datum_train[0]),)), np.vstack(datum_train[0]), oc_svm_model, '-q')
-        #datum_train[0] = [datum_train[0][i] for i in range(len(datum_train[0])) if pred_labels[i] == 1]
-    attacks_biggest_size =  2 * len(datum_train[0])
-    batch_sz = args.batch_sz
-    sampled_datum_train = []
-    if args.mode.find('rbm'):
-        data_sampler_train_type = args.rbm_train_type
-    rbm_train_type_aux = args.rbm_train_type
-    for i in range(len(datum_train)):
-        args.rbm_train_type = rbm_train_type_aux
-        if i not in [0]:
-            if args.mode.find('rbm') != -1:
-                args.rbm_train_type = args.rbm_train_type + '_' + attack_names[i]
-                data_sampler_model.load(args.data_sampler_params_path)
-                print('Sampling data from {:s} BBRBM\n'.format(attack_names[i]))
-            else:
-                data_sampler_model.load(args.data_sampler_params_path + '/' + attack_names[i])
-                print('Sampling data from {:s} GAN\n'.format(attack_names[i]))
-            attack_train_data = np.array(datum_train[i])
-            qnt_to_sample = attacks_biggest_size - attack_train_data.shape[0]
-            qnt_valid_samples = 0
-            sampled_data_train = np.array([])
-            while(qnt_valid_samples < qnt_to_sample):
-                if args.data_sampler_train_type.find('bbrbm') != -1:
-                    sampled_data = np.random.randint(low=0, high=2, size=(batch_sz, data_sampler_model.numdims))
-                elif args.data_sampler_train_type.find('bbrbm') != -1:
-                    sampled_data = np.random.rand(batch_sz, data_sampler_model.numdims)
-                elif args.data_sampler_train_type.find('gbrbm') != -1 or args.data_sampler_train_type.find('gan') != - 1:
-                    sampled_data = np.random.randn(batch_sz, args.num_vis_nodes)
-                    if args.data_sampler_train_type.find('rbm') != -1:
-                        sampled_data = data_sampler_model.sample_data(sampled_data, ites=args.sample_ites)
-                    else:
-                        sampled_data = data_sampler_model.sample_data(sampled_data)
-                if args.use_oc_svm:
-                    if i == 0:
-                        pred_labels, evals, deci  = svm_predict(np.ones((batch_sz,)), sampled_data, oc_svm_model, '-q')
-                        pred_labels = np.array(pred_labels)
-                        sampled_data = sampled_data[np.where(pred_labels == 1)[0], :]
-                    else:
-                        pred_labels, evals, deci  = svm_predict(-1 * np.ones((batch_sz,)), sampled_data, oc_svm_model, '-q')
-                        pred_labels = np.array(pred_labels)
-                        sampled_data = sampled_data[np.where(pred_labels != 1)[0], :]
-                if sampled_data.size:
-                    if not sampled_data_train.size:
-                        sampled_data_train = sampled_data
-                    else:
-                        sampled_data_train = np.concatenate((sampled_data_train, sampled_data), axis=0)
-                    '''
-                    if sampled_data_train.size > 1:
-                        # Use pairwise euclidian distance to avoid redundancies in sampled data
-                        samples_distances = np.mean(euclidean_distances(sampled_data_train), axis=0)
-                        sampled_data_train = sampled_data_train[np.where(samples_distances >= 0.8)[0], :]
-                    '''
-                    qnt_valid_samples = sampled_data_train.shape[0]
-                    print('{:d} collected samples from {:d}'.format(qnt_valid_samples, qnt_to_sample))
-            if sampled_data_train.size:
-                sampled_datum_train.append(np.vstack(sampled_data_train)[0 : qnt_to_sample, :])
-
-    sampled_data_train = np.vstack(sampled_datum_train).reshape(-1, args.num_vis_nodes)
-
-    data_train = np.vstack(datum_train)
-    data_train = min_max_norm(data_train)
-    data_train = np.concatenate((data_train, sampled_data_train), axis=0)
-    labels_train = -1 * np.ones((len(datum_train[0]),))
-    labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
-    # Use sampled data to generate augmented datum
-    aug_datum = []
-    j = 0
-    for i in range(len(datum_train)):
-        if i in [0]:
-            aug_datum.append(min_max_norm(datum_train[i]))
-        else:
-            aug_datum.append(np.vstack([min_max_norm(datum_train[i]), sampled_datum_train[j]]))
-            j += 1
-    return data_train, labels_train, aug_datum
 
 
 def gen_features_dataset(args, data_sampler_model):
-
     if args.mode.find('train') != -1:
-        datum_train = load_nsl_kdd_splitted_dataset(args.train_data_file_path, args.metadata_file_path)
+        datum_train = load_splitted_nsl_kdd_dataset(args.train_data_file_path, args.metadata_file_path)
     else:
-        datum_train = load_nsl_kdd_splitted_dataset(args.test_data_file_path, args.metadata_file_path)
+        datum_train = load_splitted_nsl_kdd_dataset(args.test_data_file_path, args.metadata_file_path)
     args.num_vis_nodes = datum_train[0].shape[1]
     attack_names = {0 : 'normal', 1 : 'u2r', 2 : 'r2l', 3 : 'dos', 4 : 'probe'}
     attacks_biggest_size =  len(datum_train[0])
     batch_sz = args.batch_sz
     data_train = []
     datum_features = []
-
     for i in range(len(datum_train)):
         rbm_train_type_aux = args.rbm_train_type
         if args.mode.find('rbm') != -1:
@@ -341,22 +269,58 @@ def gen_features_dataset(args, data_sampler_model):
     labels_train = -1 * np.ones((len(datum_train[0]),))
     labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
     return (data_train, labels_train, datum_features)
-    '''
-    sampled_data_train = np.vstack(sampled_datum_train).reshape(-1, args.num_vis_nodes)
 
-    data_train = np.vstack(datum_train)
-    data_train = np.concatenate((data_train, sampled_data_train), axis=0)
-    labels_train = -1 * np.ones((len(datum_train[0]),))
-    labels_train = np.concatenate( (labels_train, np.ones( (data_train.shape[0] - len(datum_train[0]), ) ) ), axis=0)
-    # Use sampled data to generate augmented datum
-    aug_datum = []
-    j = 0
+
+def proj_datasets(args, proj_matrix):
+    data_train, labels_train = load_nsl_kdd_dataset(args.train_data_file_path)
+    data_test, labels_test = load_nsl_kdd_dataset(args.test_data_file_path)
+
+    datum_train = load_splitted_nsl_kdd_dataset(args.train_data_file_path, args.metadata_file_path)
     for i in range(len(datum_train)):
-        if i in [0]:
-            aug_datum.append(datum_train[i])
-        else:
-            aug_datum.append(np.vstack([datum_train[i], sampled_datum_train[j]]))
-            j += 1
-    return data_train, labels_train, aug_datum
-   '''
+        datum_train[i] = preprocessing.normalize(datum_train[i], norm='l2')
+        #print(len(datum_train[i]))
 
+    datum_test = load_splitted_nsl_kdd_dataset(args.test_data_file_path, args.metadata_file_path)
+    for i in range(len(datum_test)):
+        datum_test[i] = preprocessing.normalize(datum_test[i], norm='l2')
+
+    # Project Train Data
+    projected_data = []
+    num_batches = math.ceil(data_train.shape[0]/args.batch_sz)
+    for j in range(0, num_batches):
+        if j == num_batches - 1:
+            curr_batchdata = data_train[j * args.batch_sz :, :]
+        else:
+            curr_batchdata = data_train[j * args.batch_sz : (j + 1) * args.batch_sz, :]
+        curr_batchdata = preprocessing.normalize(curr_batchdata, norm='l2')
+        curr_batchdata = np.concatenate((curr_batchdata, np.ones((curr_batchdata.shape[0], 1))), axis=1)
+        curr_batchdata = np.dot(curr_batchdata, proj_matrix)
+        projected_data.append(curr_batchdata)
+    data_train = np.vstack(projected_data)
+
+    # Project Test Data
+    projected_data = []
+    num_batches = math.ceil(data_test.shape[0]/args.batch_sz)
+    for j in range(0, num_batches):
+        if j == num_batches - 1:
+            curr_batchdata = data_test[j * args.batch_sz :, :]
+        else:
+            curr_batchdata = data_test[j * args.batch_sz : (j + 1) * args.batch_sz, :]
+        curr_batchdata = preprocessing.normalize(curr_batchdata, norm='l2')
+        curr_batchdata = np.concatenate((curr_batchdata, np.ones((curr_batchdata.shape[0], 1))), axis=1)
+        curr_batchdata = np.dot(curr_batchdata, proj_matrix)
+        projected_data.append(curr_batchdata)
+    data_test = np.vstack(projected_data)
+    return (data_train, data_test, labels_train, labels_test, datum_train, datum_test)
+
+def random_search_cv(model, params, data_train, labels_train, n_iter=100):
+    # Random search of parameters
+    rfc_random = RandomizedSearchCV(estimator = model,
+                                    param_distributions = params,
+                                    n_iter = n_iter, cv = 3, verbose=2,
+                                    random_state=42, n_jobs = -1)
+    # Fit the model
+    rfc_random.fit(data_train, labels_train)
+    # print results
+    print(rfc_random.best_params_)
+    return rfc_random.best_params_

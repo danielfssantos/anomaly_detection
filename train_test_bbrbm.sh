@@ -1,84 +1,67 @@
 #!/bin/bash
 #!/usr/bin/env python
 
-RBM_PARAMS_PATH='./RBMParams/KDDTrain+_20Percent/10neurons'
-RBM_ANALYSIS_PATH='./SamplingAnalysis/KDDTrain+_20Percent/RBM/10neurons'
-NEURONS=10
+# Script that train pcd_rbms for each one of the data types [normal, dos, probe, u2r, r2l]
+for DATASET in 'KDDTrain+' 'KDDTrain+_20Percent'; do
+   for n in 10 20 38 80 100; do
+         RBM_PARAMS_PATH='./RBMParams/'$DATASET'/'$n'neurons'
+         RBM_ANALYSIS_PATH='./SamplingAnalysis/'$DATASET'/RBM'$n'neurons'
+         if [ $n -eq 10 ]; then
+            gen_data=1
+         else
+            gen_data=0
+         fi
+         # TRAIN RBMs FOR EACH ONE OF THE ATTACK TYPES
+         for attk in 'normal' 'dos' 'probe' 'u2r' 'r2l'; do
+            if [ $attk = 'normal' ]; then
+               epw=0.05
+               ephb=0.05
+               epvb=0.05
+               batch_sz=100
+             elif [ $attk = 'dos' ]; then
+               epw=0.001
+               ephb=0.001
+               epvb=0.001
+               batch_sz=100
+            elif [ $attk = 'u2r' ]; then
+               epw=0.005
+               ephb=0.005
+               epvb=0.005
+               batch_sz=1
+            elif [ $attk = 'r2l' ]; then
+               epw=0.005
+               ephb=0.005
+               epvb=0.005
+               batch_sz=25
+             elif [ $attk = 'probe' ]; then
+               epw=0.001
+               ephb=0.001
+               epvb=0.001
+               batch_sz=100
+             fi
+            ################################### TRAIN BBRBM ##############################################
+            python3 generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_'$attk --num-epochs=300\
+                                                   --cd-steps=3 --num-hid-nodes=$n --rbm-params-path=$RBM_PARAMS_PATH\
+                                                   --gen-dataset=$gen_data --sample-visdata=0 --epsilonw=$epw --epsilonhb=$ephb --epsilonvb=$epvb\
+                                                   --batch-sz=$batch_sz --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0\
+                                                   --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'\
+                                                   --train-data-save-path='./TrainData/'$DATASET
+            ################################### EVALUATE BBRBM SAMPLES ###############################################
+            python3 generative_rbm.py  --mode='gen_samples' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_'$attk\
+                                                   --batch-sz=$batch_sz --sample-visdata=0 --sample-ites=10 --sample-data-repetitions=10\
+                                                   --rbm-params-path=$RBM_PARAMS_PATH --results-samples-path=$RBM_ANALYSIS_PATH/$attk\
+                                                   --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'\
+                                                   --train-data-save-path='./TrainData/'$DATASET
+            ################################### EVALUATE BBRBM FEATURES###############################################
+            python3 generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_'$attk\
+                                                   --batch-sz=$batch_sz --sample-visdata=0 --sample-ites=1 --sample-data-repetitions=10\
+                                                   --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH/$attk\
+                                                   --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'\
+                                                   --train-data-save-path='./TrainData/'$DATASET
+         done
+         ############################### GENERATE PROJECTION MATRIX #######################
+         python3 main_script_generative_rbm.py  --mode='gen_proj_matrix' --rbm-train-type='bbrbm_pcd'\
+                                                   --rbm-params-path=$RBM_PARAMS_PATH
+   done
+done
 
-:<<END
-################################### NOT ATTACK ###############################################
-################################### TRAIN BBRBM ##############################################
-python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_normal' --num-epochs=300\
-                                       --cd-steps=1 --num-hid-nodes=$NEURONS --rbm-params-path=$RBM_PARAMS_PATH\
-                                       --gen-dataset=0 --sample-visdata=0 --epsilonw=0.01 --epsilonhb=0.01 --epsilonvb=0.01\
-                                       --batch-sz=100 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
-END
-
-
-################################### TEST BBRBM ###############################################
-python3 main_script_generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_normal'\
-                                       --batch-sz=100 --sample-visdata=0 --sample-ites=500 --sample-data-repetitions=10\
-                                       --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH
-
-
-:<<END
-################################### DOS ATTACK ###############################################
-################################### TRAIN BBRBM ##############################################
-python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_dos' --num-epochs=300\
-                                       --cd-steps=1 --num-hid-nodes=$NEURONS --rbm-params-path=$RBM_PARAMS_PATH\
-                                       --gen-dataset=0 --sample-visdata=0 --epsilonw=0.001 --epsilonhb=0.001 --epsilonvb=0.001\
-                                       --batch-sz=100 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
-END
-
-
-################################### TEST BBRBM ###############################################
-python3 main_script_generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_dos'\
-                                       --batch-sz=100 --sample-visdata=0 --sample-ites=500 --sample-data-repetitions=10\
-                                       --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH
-
-:<<END
-#################################### U2R ATTACK ##############################################
-################################### TRAIN BBRBM  #############################################
-python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_u2r' --num-epochs=300\
-                                       --cd-steps=1 --num-hid-nodes=$NEURONS --rbm-params-path=$RBM_PARAMS_PATH\
-                                       --gen-dataset=1 --sample-visdata=0 --epsilonw=0.005 --epsilonhb=0.005 --epsilonvb=0.005\
-                                       --batch-sz=5 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
-
-END
-
-
-################################### TEST BBRBM ################################################
-python3 main_script_generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_u2r'\
-                                       --batch-sz=5 --sample-visdata=0 --sample-ites=500 --sample-data-repetitions=10\
-                                       --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH
-
-:<<END
-#################################### R2L ATTACK ###############################################
-################################### TRAIN BBRBM  ##############################################
-python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_r2l' --num-epochs=300\
-                                       --cd-steps=1 --num-hid-nodes=$NEURONS --rbm-params-path=$RBM_PARAMS_PATH\
-                                       --gen-dataset=0 --sample-visdata=0 --epsilonw=0.005 --epsilonhb=0.005 --epsilonvb=0.005\
-                                       --batch-sz=100 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
-END
-
-
-################################### TEST BBRBM ################################################
-python3 main_script_generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_r2l'\
-                                       --batch-sz=100 --sample-visdata=0 --sample-ites=500 --sample-data-repetitions=10\
-                                       --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH
-
-
-:<<END
-#################################### PROBE ATTACK #############################################
-#################################### TRAIN BBRBM  #############################################
-python3 main_script_generative_rbm.py  --mode='train' --rbm-train-type='bbrbm_pcd_probe' --num-epochs=300\
-                                       --cd-steps=1 --num-hid-nodes=$NEURONS --rbm-params-path=$RBM_PARAMS_PATH\
-                                       --gen-dataset=0 --sample-visdata=0 --epsilonw=0.005 --epsilonhb=0.005 --epsilonvb=0.005\
-                                       --batch-sz=100 --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0
-END
-
-
-#################################### TEST BBRBM ################################################
-python3 main_script_generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_probe'\
-                                       --batch-sz=100 --sample-visdata=0 --sample-ites=100 --sample-data-repetitions=10\
-                                       --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH
