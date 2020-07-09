@@ -4,21 +4,19 @@
 for DATASET in 'KDDTrain+' 'KDDTrain+_20Percent'; do
        ################################### TRAIN DTREE WITHOUT PROJECTED DATA ##############################################
        python3 dtree_detector.py --mode='train_dtree'\
-                                                 --dtree-params-path='DTREEParams/'$DATASET'/WithoutProjection'\
+                                                 --dtree-params-path='Results/DTREEParams/'$DATASET'/WithoutProjection'\
                                                  --gen-dataset=1\
-                                                 --norm-type=''\
                                                  --max-features='sqrt'\
                                                  --max-depth=100\
-                                                 --data-save-path='TrainData/'$DATASET'/'\
+                                                 --data-save-path='Results/TrainData/'$DATASET'/'\
                                                  --train-file-name='discriminative_kdd_nsl_processed.npz'\
                                                  --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'
        ################################### TEST DTREE WITHOUT PROJECTED DATA ##############################################
        python3 dtree_detector.py  --mode='test_dtree'\
-                                                 --dtree-params-path='DTREEParams/'$DATASET'/WithoutProjection'\
-                                                 --norm-type=''\
-                                                 --data-save-path='TrainData/'$DATASET'/'\
+                                                 --dtree-params-path='Results/DTREEParams/'$DATASET'/WithoutProjection'\
+                                                 --data-save-path='Results/TrainData/'$DATASET'/'\
                                                  --train-file-name='discriminative_kdd_nsl_processed.npz'\
-                                                 --dtree-analysis-path='./DTREEAnalysis/'$DATASET'/WithoutProjection'\
+                                                 --dtree-analysis-path='./Results/DTREEAnalysis/'$DATASET'/WithoutProjection'\
                                                  --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'
        ################ FULL EXPERIMENT USING RBMs 10 20 38 80 100 ####################
        for n in 10 20 38 80 100; do
@@ -43,19 +41,19 @@ for DATASET in 'KDDTrain+' 'KDDTrain+_20Percent'; do
                                                         --gen-dataset=1\
                                                         --max-features=$total_feat\
                                                         --max-depth=$depth\
-                                                        --dtree-params-path='DTREEParams/'$DATASET'/WithProjection/RBM'$n'neurons'\
-                                                        --data-sampler-params-path='./RBMParams/'$DATASET'/'$n'neurons'\
+                                                        --dtree-params-path='Results/DTREEParams/'$DATASET'/WithProjection/RBM'$n'neurons'\
+                                                        --data-sampler-params-path='./Results/RBMParams/'$DATASET'/'$n'neurons'\
                                                         --train-file-name=$n'_projected_kdd_nsl.npz'\
-                                                        --data-save-path='TrainData/'$DATASET'/RBMProjected'\
+                                                        --data-save-path='Results/TrainData/'$DATASET'/RBMProjected'\
                                                         --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'
               ################################### TEST DTREE WITH PROJECTED DATA ##############################################
               python3 dtree_detector.py  --mode='test_dtree_rbm_proj'\
                                                         --gen-dataset=0\
-                                                        --dtree-params-path='DTREEParams/'$DATASET'/WithProjection/RBM'$n'neurons'\
+                                                        --dtree-params-path='Results/DTREEParams/'$DATASET'/WithProjection/RBM'$n'neurons'\
                                                         --data-sampler-params-path='./RBMParams/'$DATASET'/'$n'neurons'\
-                                                        --dtree-analysis-path='./DTREEAnalysis/'$DATASET'/WithProjection/RBM'$n'neurons'\
+                                                        --dtree-analysis-path='./Results/DTREEAnalysis/'$DATASET'/WithProjection/RBM'$n'neurons'\
                                                         --train-file-name=$n'_projected_kdd_nsl.npz'\
-                                                        --data-save-path='TrainData/'$DATASET'/RBMProjected'\
+                                                        --data-save-path='Results/TrainData/'$DATASET'/RBMProjected'\
                                                         --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'
        done
 done

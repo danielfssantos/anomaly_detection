@@ -4,8 +4,8 @@
 # Script that train pcd_rbms for each one of the data types [normal, dos, probe, u2r, r2l]
 for DATASET in 'KDDTrain+' 'KDDTrain+_20Percent'; do
    for n in 10 20 38 80 100; do
-         RBM_PARAMS_PATH='./RBMParams/'$DATASET'/'$n'neurons'
-         RBM_ANALYSIS_PATH='./SamplingAnalysis/'$DATASET'/RBM'$n'neurons'
+         RBM_PARAMS_PATH='./Results/RBMParams/'$DATASET'/'$n'neurons'
+         RBM_ANALYSIS_PATH='./Results/SamplingAnalysis/'$DATASET'/RBM'$n'neurons'
          if [ $n -eq 10 ]; then
             gen_data=1
          else
@@ -45,22 +45,22 @@ for DATASET in 'KDDTrain+' 'KDDTrain+_20Percent'; do
                                                    --gen-dataset=$gen_data --sample-visdata=0 --epsilonw=$epw --epsilonhb=$ephb --epsilonvb=$epvb\
                                                    --batch-sz=$batch_sz --weightcost=0.0 --initialmomentum=0.0 --finalmomentum=0.0\
                                                    --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'\
-                                                   --train-data-save-path='./TrainData/'$DATASET
+                                                   --train-data-save-path='./Results/TrainData/'$DATASET
             ################################### EVALUATE BBRBM SAMPLES ###############################################
             python3 generative_rbm.py  --mode='gen_samples' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_'$attk\
                                                    --batch-sz=$batch_sz --sample-visdata=0 --sample-ites=10 --sample-data-repetitions=10\
                                                    --rbm-params-path=$RBM_PARAMS_PATH --results-samples-path=$RBM_ANALYSIS_PATH/$attk\
                                                    --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'\
-                                                   --train-data-save-path='./TrainData/'$DATASET
+                                                   --train-data-save-path='./Results/TrainData/'$DATASET
             ################################### EVALUATE BBRBM FEATURES###############################################
             python3 generative_rbm.py  --mode='gen_features' --gen-dataset=0 --rbm-train-type='bbrbm_pcd_'$attk\
                                                    --batch-sz=$batch_sz --sample-visdata=0 --sample-ites=1 --sample-data-repetitions=10\
                                                    --rbm-params-path=$RBM_PARAMS_PATH --results-features-path=$RBM_ANALYSIS_PATH/$attk\
                                                    --train-data-file-path='./NSL_KDD_Dataset/'$DATASET'.txt'\
-                                                   --train-data-save-path='./TrainData/'$DATASET
+                                                   --train-data-save-path='./Results/TrainData/'$DATASET
          done
          ############################### GENERATE PROJECTION MATRIX #######################
-         python3 main_script_generative_rbm.py  --mode='gen_proj_matrix' --rbm-train-type='bbrbm_pcd'\
+         python3 generative_rbm.py  --mode='gen_proj_matrix' --rbm-train-type='bbrbm_pcd'\
                                                    --rbm-params-path=$RBM_PARAMS_PATH
    done
 done

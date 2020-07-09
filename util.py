@@ -272,6 +272,7 @@ def gen_features_dataset(args, data_sampler_model):
 
 
 def proj_datasets(args, proj_matrix):
+    batch_sz = 100
     data_train, labels_train = load_nsl_kdd_dataset(args.train_data_file_path)
     data_test, labels_test = load_nsl_kdd_dataset(args.test_data_file_path)
 
@@ -286,12 +287,12 @@ def proj_datasets(args, proj_matrix):
 
     # Project Train Data
     projected_data = []
-    num_batches = math.ceil(data_train.shape[0]/args.batch_sz)
+    num_batches = math.ceil(data_train.shape[0]/batch_sz)
     for j in range(0, num_batches):
         if j == num_batches - 1:
-            curr_batchdata = data_train[j * args.batch_sz :, :]
+            curr_batchdata = data_train[j * batch_sz :, :]
         else:
-            curr_batchdata = data_train[j * args.batch_sz : (j + 1) * args.batch_sz, :]
+            curr_batchdata = data_train[j * batch_sz : (j + 1) * batch_sz, :]
         curr_batchdata = preprocessing.normalize(curr_batchdata, norm='l2')
         curr_batchdata = np.concatenate((curr_batchdata, np.ones((curr_batchdata.shape[0], 1))), axis=1)
         curr_batchdata = np.dot(curr_batchdata, proj_matrix)
@@ -300,12 +301,12 @@ def proj_datasets(args, proj_matrix):
 
     # Project Test Data
     projected_data = []
-    num_batches = math.ceil(data_test.shape[0]/args.batch_sz)
+    num_batches = math.ceil(data_test.shape[0]/batch_sz)
     for j in range(0, num_batches):
         if j == num_batches - 1:
-            curr_batchdata = data_test[j * args.batch_sz :, :]
+            curr_batchdata = data_test[j * batch_sz :, :]
         else:
-            curr_batchdata = data_test[j * args.batch_sz : (j + 1) * args.batch_sz, :]
+            curr_batchdata = data_test[j * batch_sz : (j + 1) * batch_sz, :]
         curr_batchdata = preprocessing.normalize(curr_batchdata, norm='l2')
         curr_batchdata = np.concatenate((curr_batchdata, np.ones((curr_batchdata.shape[0], 1))), axis=1)
         curr_batchdata = np.dot(curr_batchdata, proj_matrix)

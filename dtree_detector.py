@@ -136,6 +136,8 @@ def parse_args():
                         help='path to the test data .csv file')
     parser.add_argument('--train-file-name', type=str, default='',
                         help='path to the train data .csv file')
+    parser.add_argument('--data-sampler-params-path', type=str, default='./RBMParams/KDDTrain+_20Percent',
+                        help='path location to save RBM trained weights')
     parser.add_argument('--dtree-params-path', type=str, default='./DTREEParams',
                         help='path location to save RBM trained weights')
     parser.add_argument('--dtree-analysis-path', type=str, default='./DTREEAnalysis',

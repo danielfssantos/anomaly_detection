@@ -134,7 +134,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train-data-file-path', type=str, default='',
                         help='path to the train data .csv file')
-    parser.add_argument('--test-data-file-path', type=str, default='',
+    parser.add_argument('--test-data-file-path', type=str, default='./NSL_KDD_Dataset/KDDTest+.txt',
                         help='path to the test data .csv file')
     parser.add_argument('--metadata-file-path', type=str, default='./NSL_KDD_Dataset/training_attack_types.txt',
                         help='path to the test data .csv file')
@@ -146,6 +146,8 @@ def parse_args():
                         help='path location to save RBM trained weights')
     parser.add_argument('--data-save-path', type=str, default='',
                         help='train and test datasets save location')
+    parser.add_argument('--data-sampler-params-path', type=str, default='',
+                        help='path location to save RBM trained weights')
     parser.add_argument('--datum-save-path', type=str, default='',
                         help='train and test datasets save location')
     parser.add_argument('--mode', type=str, default='train_randforest',
