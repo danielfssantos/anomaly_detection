@@ -1,0 +1,6 @@
+seaborn
+xlsxwriter
+scikit-learn==0.20.0
+matplotlib
+scipy
+numpy
