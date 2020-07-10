@@ -1,27 +1,31 @@
 import argparse
-import warnings, os
+import warnings
+import os
+import sys
+import numpy as np
+sys.path.append('/home/daniel/Documents/DeepLearningOpenCV/libsvm-3.23/python')
+from svmutil import svm_train
+from svmutil import svm_save_model
+from svmutil import svm_load_model
+from svmutil import svm_predict
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter('ignore', DeprecationWarning)
-from rbm import RBM
+from util import load_nsl_kdd_dataset
+from util import load_splitted_nsl_kdd_dataset
+from util import proj_datasets
+from util import generate_roc
 from sklearn.metrics import classification_report
 import xlsxwriter
-from sklearn.preprocessing import StandardScaler
-from util import *
-sys.path.append('/home/daniel/Documents/DeepLearningOpenCV/libsvm-3.23/python')
-from svmutil import *
 
 
 def main(args):
     os.system('cls' if os.name == 'nt' else 'clear')
     os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
     if args.mode.find('train') != -1 and args.gen_dataset:
-        if args.mode.find('features') != -1:
-            data_sampler_model = RBM(args)
-            data_train, labels_train, datum_features = gen_features_dataset(args, data_sampler_model)
-        elif args.mode.find('proj') != -1:
+        if args.mode.find('proj') != -1:
             npz_files = np.load(os.path.join(args.data_sampler_params_path,
-                                                            args.projection_matrix_name),
-                                                            allow_pickle=True)
+                                             args.projection_matrix_name),
+                                allow_pickle=True)
             rbm_proj_matrix = npz_files['arr_0']
             data_train, data_test, labels_train,\
             labels_test, datum_train, datum_test = proj_datasets(args, rbm_proj_matrix)
@@ -32,25 +36,21 @@ def main(args):
             datum_test = load_splitted_nsl_kdd_dataset(args.test_data_file_path, args.metadata_file_path)
         if args.mode.find('proj') == -1:
             data_test, labels_test = load_nsl_kdd_dataset(args.test_data_file_path)
-
         # Save processed data
         os.makedirs(args.data_save_path, exist_ok=True)
-        if args.mode.find('features') != -1:
+        if args.mode.find('proj') != -1:
             np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
                                              data_train, labels_train, data_test,
-                                             labels_test, datum_features)
-        elif args.mode.find('proj') != -1:
-            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
-                                             data_train, labels_train, data_test,
-                                             labels_test, datum_train, datum_test)
+                                labels_test, datum_train, datum_test)
         else:
             np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
                                              data_train, labels_train, data_test, labels_test)
     elif args.mode.find('features') == -1:
         npzfiles = np.load(os.path.join(args.data_save_path, args.train_file_name), allow_pickle=True)
-        data_train = npzfiles['arr_0']; labels_train = npzfiles['arr_1']
-        data_test = npzfiles['arr_2']; labels_test = npzfiles['arr_3']
-
+        data_train = npzfiles['arr_0']
+        labels_train = npzfiles['arr_1']
+        data_test = npzfiles['arr_2']
+        labels_test = npzfiles['arr_3']
     # Train SVM rbf kernel
     if args.mode.find('train_svm') != -1:
         # If mode train_svm_cross the cross validation will be executed
@@ -60,16 +60,19 @@ def main(args):
             idx_rand = np.random.permutation(data_train.shape[0])
             data_train_cross_val = data_train[idx_rand, :]
             labels_train_cross_val = labels_train[idx_rand]
-            data_train_cross_val = data_train_cross_val[0 : math.ceil(data_train_cross_val.shape[0] * 0.03), :]
-            labels_train_cross_val = labels_train_cross_val[0 : math.ceil(labels_train_cross_val.shape[0] * 0.03)]
+            data_train_cross_val = data_train_cross_val[0: int(np.ceil(data_train_cross_val.shape[0] * 0.03)), :]
+            labels_train_cross_val = labels_train_cross_val[0: int(np.ceil(labels_train_cross_val.shape[0] * 0.03))]
             # Use svm cross validation technique to find best Cost and RBF kernel deviation values
             best_c = -1
             best_g = -1
             best_acc = 0
             for i in range(-5, 15, 1):
                 for j in range(3, -15, -1):
-                    new_c = 2**i; new_g = 2**j
-                    cv_acc = svm_train(np.squeeze(labels_train_cross_val), data_train_cross_val, '-c {:.5f} -g {:.5f} -v 10 -q'.format(new_c, new_g))
+                    new_c = 2**i
+                    new_g = 2**j
+                    cv_acc = svm_train(np.squeeze(labels_train_cross_val),
+                                       data_train_cross_val,
+                                       '-c {:.5f} -g {:.5f} -v 10 -q'.format(new_c, new_g))
                     if cv_acc > best_acc:
                         best_acc = cv_acc
                         best_c = new_c
@@ -84,7 +87,9 @@ def main(args):
             print('\nTraining SVM without RBM projection...\n')
         svm_model = svm_train(np.squeeze(labels_train), data_train, '-c {:.5f} -g {:.5f} -q'.format(args.c, args.g))
         os.makedirs(args.svm_params_path, exist_ok=True)
-        svm_save_model(os.path.join(args.svm_params_path, 'svm_model.txt'), svm_model)
+        svm_save_model(os.path.join(args.svm_params_path,
+                                    'svm_model.txt'),
+                       svm_model)
     # Test SVM
     elif args.mode.find('test_svm') != -1:
         os.makedirs(args.svm_params_path, exist_ok=True)
@@ -92,19 +97,20 @@ def main(args):
             print('\nTesting SVM using RBM projection...\n')
         else:
             print('\nTesting SVM without RBM projection...\n')
-        svm_model = svm_load_model(os.path.join(args.svm_params_path, 'svm_model.txt'))
-        if args.mode.find('features') != -1:
-            data_sampler_model = RBM(args)
-            data_test, labels_test, _ = gen_features_dataset(args, data_sampler_model)
+        svm_model = svm_load_model(os.path.join(args.svm_params_path,
+                                                'svm_model.txt'))
         labels_test = np.squeeze(labels_test)
-        pred_labels, evals, deci  = svm_predict(labels_test, data_test, svm_model, '-q')
+        pred_labels, evals, deci = svm_predict(labels_test,
+                                               data_test,
+                                               svm_model,
+                                               '-q')
         accuracy = evals[0]/100.0
         # Plot ROC curve and Misclassification bars graph
         labels = svm_model.get_labels()
         deci = [labels[0]*val[0] for val in deci]
         os.makedirs(args.svm_analysis_path, exist_ok=True)
         print('Saving ROC under {:s} folder'.format(args.svm_analysis_path))
-        generate_roc2(deci, labels_test, args.svm_analysis_path)
+        generate_roc(deci, labels_test, args.svm_analysis_path)
         results_dict = classification_report(labels_test, pred_labels, output_dict=True)
         precision = (results_dict['-1']['precision']+results_dict['1']['precision'])/2
         recall = (results_dict['-1']['recall']+results_dict['1']['recall'])/2
@@ -160,6 +166,6 @@ def parse_args():
                         help='normalization type that will be applied to the train and test data')
     return parser.parse_args()
 
+
 if __name__ == '__main__':
     main(parse_args())
-

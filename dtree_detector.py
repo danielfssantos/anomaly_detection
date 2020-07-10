@@ -1,24 +1,26 @@
 import argparse
-from util import *
-import warnings, os
+from util import load_nsl_kdd_dataset
+from util import load_splitted_nsl_kdd_dataset
+from util import proj_datasets
+from util import random_search_cv
+from util import generate_roc
+import warnings
+import numpy as np
+import os
 import pickle
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter('ignore', DeprecationWarning)
-from rbm import RBM
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report
 import xlsxwriter
-from sklearn.preprocessing import StandardScaler
+
 
 def main(args):
     os.system('cls' if os.name == 'nt' else 'clear')
     os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
 
     if args.mode.find('train') != -1 and args.gen_dataset:
-        if args.mode.find('features') != -1:
-            data_sampler_model = RBM(args)
-            data_train, labels_train, datum_features = gen_features_dataset(args, data_sampler_model)
-        elif args.mode.find('proj') != -1:
+        if args.mode.find('proj') != -1:
             npz_files = np.load(os.path.join(args.data_sampler_params_path,
                                              args.projection_matrix_name),
                                 allow_pickle=True)
@@ -32,32 +34,30 @@ def main(args):
             datum_test = load_splitted_nsl_kdd_dataset(args.test_data_file_path, args.metadata_file_path)
         if args.mode.find('proj') == -1:
             data_test, labels_test = load_nsl_kdd_dataset(args.test_data_file_path)
-
         # Save processed data
         os.makedirs(args.data_save_path, exist_ok=True)
-        if args.mode.find('features') != -1:
-            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
-                                             data_train, labels_train, data_test,
-                                             labels_test, datum_features)
-        elif args.mode.find('proj') != -1:
-            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
-                                             data_train, labels_train, data_test,
-                                             labels_test, datum_train, datum_test)
+        if args.mode.find('proj') != -1:
+            np.savez_compressed(os.path.join(args.data_save_path,
+                                             args.train_file_name),
+                                data_train, labels_train, data_test,
+                                labels_test, datum_train, datum_test)
         else:
-            np.savez_compressed(os.path.join(args.data_save_path, args.train_file_name),\
-                                             data_train, labels_train, data_test, labels_test)
-
-    elif args.mode.find('features') == -1:
+            np.savez_compressed(os.path.join(args.data_save_path,
+                                             args.train_file_name),
+                                data_train, labels_train,
+                                data_test, labels_test)
+    else:
         npzfiles = np.load(os.path.join(args.data_save_path, args.train_file_name), allow_pickle=True)
-        data_train = npzfiles['arr_0']; labels_train = npzfiles['arr_1']
-        data_test = npzfiles['arr_2']; labels_test = npzfiles['arr_3']
-
-    # Train DTREE
+        data_train = npzfiles['arr_0']
+        labels_train = npzfiles['arr_1']
+        data_test = npzfiles['arr_2']
+        labels_test = npzfiles['arr_3']
+    # Train DTREE classifier
     if args.mode.find('train_dtree') != -1:
         if args.mode.find('cross') != - 1:
             print('Find suitable parameters...')
             max_features = ['auto', 'sqrt']
-            max_depth = [int(x) for x in np.linspace(100, 500, num = 11)]
+            max_depth = [int(x) for x in np.linspace(100, 500, num=11)]
             max_depth.append(None)
             # create random grid
             params_to_tune = {
@@ -68,24 +68,28 @@ def main(args):
             idx_rand = np.random.permutation(data_train.shape[0])
             data_train_cross_val = data_train[idx_rand, :]
             labels_train_cross_val = labels_train[idx_rand]
-            data_train_cross_val = data_train_cross_val[0 : math.ceil(data_train_cross_val.shape[0] * 0.5), :]
-            labels_train_cross_val = labels_train_cross_val[0 : math.ceil(labels_train_cross_val.shape[0] * 0.5)]
-            best_params = random_search_cv(dtree_model, params_to_tune, data_train_cross_val, labels_train_cross_val,
-                                            n_iter=20)
+            data_train_cross_val = data_train_cross_val[0: int(np.ceil(data_train_cross_val.shape[0] * 0.5)), :]
+            labels_train_cross_val = labels_train_cross_val[0: int(np.ceil(labels_train_cross_val.shape[0] * 0.5))]
+            best_params = random_search_cv(dtree_model,
+                                           params_to_tune,
+                                           data_train_cross_val,
+                                           labels_train_cross_val,
+                                           n_iter=20)
             args.max_features = best_params['max_features']
             args.max_depth = best_params['max_depth']
         if args.mode.find('proj') != -1:
             print('\nTraining DTREE with projected data...\n')
         else:
             print('\nTraining DTREE without projected data...\n')
-        dtree_model = DecisionTreeClassifier(max_depth=args.max_depth, max_features=args.max_features)
+        dtree_model = DecisionTreeClassifier(max_depth=args.max_depth,
+                                             max_features=args.max_features)
         dtree_model = dtree_model.fit(data_train, labels_train)
         # Save model
         os.makedirs(args.dtree_params_path, exist_ok=True)
         pkl_file = open(os.path.join(args.dtree_params_path, 'dtree_model.pkl'), 'wb')
         pickle.dump(dtree_model, pkl_file)
         pkl_file.close()
-    # Test DTREE
+    # Test DTREE classifier
     elif args.mode.find('test_dtree') != -1:
         os.makedirs(args.dtree_analysis_path, exist_ok=True)
         if args.mode.find('proj') != -1:
@@ -94,13 +98,10 @@ def main(args):
             print('\nTesting DTREE without projected data...\n')
         pkl_file = open(os.path.join(args.dtree_params_path, 'dtree_model.pkl'), 'rb')
         dtree_model = pickle.load(pkl_file)
-        if args.mode.find('features') != -1:
-            data_sampler_model = RBM(args)
-            data_test, labels_test, _ = gen_features_dataset(args, data_sampler_model)
         pred_labels = dtree_model.predict(data_test)
         # Plot ROC curve and Misclassification bars graph
         print('Saving ROC under {:s} folder'.format(args.dtree_analysis_path))
-        generate_roc2(pred_labels, labels_test, args.dtree_analysis_path)
+        generate_roc(pred_labels, labels_test, args.dtree_analysis_path)
         results_dict = classification_report(labels_test, pred_labels, output_dict=True)
         accuracy = np.sum(pred_labels == labels_test)/pred_labels.shape[0]
         precision = (results_dict['-1']['precision']+results_dict['1']['precision'])/2
@@ -110,7 +111,8 @@ def main(args):
                 accuracy, precision, recall, f_score))
         # Save results into spread sheet
         # Workbook is created
-        workbook = xlsxwriter.Workbook(os.path.join(args.dtree_analysis_path, 'results.xlsx'))
+        workbook = xlsxwriter.Workbook(os.path.join(args.dtree_analysis_path,
+                                                    'results.xlsx'))
         worksheet = workbook.add_worksheet()
         bold = workbook.add_format({'bold': True})
         worksheet.write(0, 0, '')
@@ -158,6 +160,6 @@ def parse_args():
                         help='momentum value to end the training process')
     return parser.parse_args()
 
+
 if __name__ == '__main__':
     main(parse_args())
-
