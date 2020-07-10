@@ -4,7 +4,7 @@ Code implementation of the work Enhancing Anomaly Detection Through Restricted B
 
 ## Install components
 
-1. Download libsvm from [here](ttp://www.csie.ntu.edu.tw/~cjlin/cgi-bin/libsvm.cgi?%20http://www.csie.ntu.edu.tw/~cjlin/libsvm%20tar.gz). Follow the libsvm README build steps and also remember to build the python interface.
+1. Download libsvm from [here](http://www.csie.ntu.edu.tw/~cjlin/cgi-bin/libsvm.cgi?+http://www.csie.ntu.edu.tw/~cjlin/libsvm). Follow the libsvm README build steps and also remember to build the python interface.
 
 2. Substitute the python libsvm path inside svm_detector.py by:
 ```bash
