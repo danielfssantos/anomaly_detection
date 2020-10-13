@@ -9,6 +9,17 @@
 If you use our work to fulfill any of your needs, please cite us:
 
 ```
+@article{Rosa:20,
+  author={Rosa, Gustavo H. de and Roder, Mateus and Santos, Daniel F. S. and Costa, Kelton A. P.},
+  title={Enhancing anomaly detection through restricted Boltzmann machine features projection},
+  journal={International Journal of Information Technology},
+  year={2020},
+  month={Oct},
+  day={13},
+  issn={2511-2112},
+  doi={10.1007/s41870-020-00535-4},
+  url={https://doi.org/10.1007/s41870-020-00535-4}
+}
 ```
 
 ---
